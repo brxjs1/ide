@@ -1,0 +1,13 @@
+[package]
+name = "ide-core"
+description = "Núcleo do ide: git, projeto, worktrees. Sem dependência de UI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
