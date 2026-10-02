@@ -5,25 +5,55 @@ Visão completa e fases em [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## App desktop (Tauri 2 + SolidJS)
 
+![Agente com aprovação de comando](docs/images/agente.png)
+
+| | |
+|---|---|
+| ![Diff e terminal](docs/images/diff-terminal.png) | ![Timeline](docs/images/timeline.png) |
+
+O que já funciona (Fase 1):
+
+- **Agente** (Claude Agent SDK num sidecar Node): chat com streaming de texto e
+  ferramentas, sessão contínua, "Nova conversa", interromper e três níveis de autonomia:
+
+  | Modo | Leitura | Edição | Comandos |
+  |---|---|---|---|
+  | Planejar | automática | bloqueada | bloqueados |
+  | Assistido | automática | pede aprovação | pede aprovação |
+  | Autônomo | automática | automática | pede aprovação |
+
+- **Terminal** real (PTY) com o seu shell, cores e redimensionamento.
+- **Diff** do working tree contra o HEAD, inclusive arquivos novos.
+- **Timeline** em SQLite: prompts, ferramentas usadas, custo e terminais, por projeto.
+- Barra lateral com branch, alterações e worktrees, atualizada ao fim de cada execução.
+
 Monorepo com pnpm workspaces + Cargo workspace. Estrutura e regras em
 [`.project/architecture/monorepo.md`](.project/architecture/monorepo.md).
 
 ```text
 apps/desktop/        @ide/desktop — UI Solid + src-tauri (comandos finos)
-crates/core/         ide-core — lógica pura em Rust (git, projeto, worktrees)
-packages/            (futuro) sidecar do agente
+crates/core/         ide-core — git: projeto, worktrees, diff
+crates/pty/          ide-pty — terminais
+crates/timeline/     ide-timeline — eventos em SQLite
+crates/agent/        ide-agent — ponte com o sidecar (JSON lines)
+packages/agent/      @ide/agent — sidecar Node com o Claude Agent SDK
 ```
 
 Pré-requisitos: Node ≥ 22, pnpm 10, Rust stable e as
 [dependências de sistema do Tauri](https://v2.tauri.app/start/prerequisites/)
 (no Linux: `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev`).
 
+O agente usa as credenciais do Claude Code: `ANTHROPIC_API_KEY` no ambiente ou o login
+feito com `claude`.
+
 ```bash
 pnpm install
-pnpm dev        # abre o app com hot reload
-pnpm check      # typecheck + fmt + clippy + testes
+pnpm dev        # compila o sidecar e abre o app com hot reload, no diretório atual
+pnpm check      # typecheck + fmt + clippy + testes (Rust e sidecar)
 pnpm build      # instaladores em target/release/bundle
 ```
+
+O app abre o projeto git do diretório onde foi iniciado.
 
 ## Fase 0 — usar hoje com Claude Code
 
