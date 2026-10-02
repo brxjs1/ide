@@ -1,2 +1,4 @@
 /target/
 /gen/schemas
+# Gerado por scripts/bundle-sidecar.mjs
+/resources/agent/

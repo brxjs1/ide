@@ -46,7 +46,8 @@ pub fn agent_send(
     if slot.process.is_none() {
         slot.generation += 1;
         let generation = slot.generation;
-        let command = SidecarCommand::locate().map_err(err)?;
+        let resources = app.path().resource_dir().ok();
+        let command = SidecarCommand::locate(resources.as_deref()).map_err(err)?;
         let on_message = {
             let app = app.clone();
             move |msg: Outbound| {

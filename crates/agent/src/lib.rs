@@ -2,7 +2,7 @@
 //! JSON lines em stdin/stdout. Os tipos espelham `packages/agent/src/protocol.ts`.
 
 use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::{Arc, Mutex};
 
@@ -140,18 +140,36 @@ pub struct SidecarCommand {
 }
 
 impl SidecarCommand {
-    /// `node <script>`. O script vem de `IDE_AGENT_SCRIPT` ou do build local em
-    /// `packages/agent/dist`; o Node, de `IDE_NODE` ou do PATH.
-    /// O empacotamento do sidecar no instalador fica para a Fase 2.
-    pub fn locate() -> Result<Self> {
-        let script = std::env::var_os("IDE_AGENT_SCRIPT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../packages/agent/dist/index.js")
-            });
-        if !script.is_file() {
-            return Err(Error::ScriptNotFound(script));
+    /// `node <script>`, procurando o script nesta ordem:
+    /// 1. `IDE_AGENT_SCRIPT`;
+    /// 2. `<resource_dir>/agent/dist/index.js` — o sidecar empacotado no instalador
+    ///    (`scripts/bundle-sidecar.mjs`);
+    /// 3. o build local em `packages/agent/dist` (desenvolvimento).
+    ///
+    /// O Node vem de `IDE_NODE` ou do PATH.
+    pub fn locate(resource_dir: Option<&Path>) -> Result<Self> {
+        let candidates = [
+            std::env::var_os("IDE_AGENT_SCRIPT").map(PathBuf::from),
+            resource_dir.map(|dir| dir.join("agent/dist/index.js")),
+            Some(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../packages/agent/dist/index.js"),
+            ),
+        ];
+        // Variável definida mas apontando para nada é erro, não fallback silencioso.
+        if let Some(explicit) = &candidates[0] {
+            if !explicit.is_file() {
+                return Err(Error::ScriptNotFound(explicit.clone()));
+            }
         }
+        let script = candidates
+            .iter()
+            .flatten()
+            .find(|p| p.is_file())
+            .cloned()
+            .ok_or_else(|| {
+                Error::ScriptNotFound(candidates.into_iter().flatten().last().unwrap_or_default())
+            })?;
         Ok(Self {
             program: std::env::var("IDE_NODE").unwrap_or_else(|_| "node".into()),
             args: vec![script.to_string_lossy().into_owned()],
@@ -317,6 +335,20 @@ mod tests {
         }))
         .unwrap();
         assert!(matches!(done, Outbound::Done { cost_usd: Some(c), .. } if c == 0.5));
+    }
+
+    #[test]
+    fn encontra_sidecar_empacotado_nos_recursos() {
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("agent/dist/index.js");
+        std::fs::create_dir_all(script.parent().unwrap()).unwrap();
+        std::fs::write(&script, "").unwrap();
+
+        // Sem IDE_AGENT_SCRIPT (não definida nos testes), os recursos têm prioridade.
+        if std::env::var_os("IDE_AGENT_SCRIPT").is_none() {
+            let cmd = SidecarCommand::locate(Some(dir.path())).unwrap();
+            assert_eq!(cmd.args, [script.to_string_lossy()]);
+        }
     }
 
     /// Sidecar falso em Node: responde a cada prompt com um texto e um done.
