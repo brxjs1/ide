@@ -6,10 +6,11 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --filter @ide/desktop tauri dev",
-    "build": "pnpm --filter @ide/desktop tauri build",
+    "dev": "pnpm --filter @ide/agent build && pnpm --filter @ide/desktop tauri dev",
+    "build": "pnpm --filter @ide/agent build && pnpm --filter @ide/desktop tauri build",
     "dev:web": "pnpm --filter @ide/desktop dev",
     "typecheck": "pnpm -r typecheck",
-    "check": "pnpm typecheck && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    "test": "pnpm --filter @ide/agent test && cargo test --workspace",
+    "check": "pnpm typecheck && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && pnpm test"
   }
 }

@@ -30,4 +30,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # O tauri::generate_context! exige o frontend compilado em apps/desktop/dist.
       - run: pnpm --filter @ide/desktop build
+      - run: pnpm --filter @ide/agent build
       - run: pnpm check
