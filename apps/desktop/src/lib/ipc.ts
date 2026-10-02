@@ -79,3 +79,39 @@ export const taskCreate = (root: string, slug: string, goal: string) =>
 export const taskDiff = (root: string, slug: string) => invoke<string>("task_diff", { root, slug });
 export const taskMerge = (root: string, slug: string) => invoke<string>("task_merge", { root, slug });
 export const taskDiscard = (root: string, slug: string) => invoke<void>("task_discard", { root, slug });
+
+export interface Commit {
+  hash: string;
+  subject: string;
+  author: string;
+  /** Segundos Unix. */
+  time: number;
+  merge: boolean;
+}
+
+export interface Stats {
+  prompts: number;
+  tools: number;
+  errors: number;
+  terminals: number;
+  tasksCreated: number;
+  tasksMerged: number;
+  costUsd: number;
+}
+
+export interface Brief {
+  /** Meia-noite local, em ms. */
+  since: number;
+  commits: Commit[];
+  tasks: Task[];
+  changed: ChangedFile[];
+  stats: Stats;
+  spentToday: number;
+  budgetUsd: number | null;
+}
+
+export const dailyBrief = (root: string) => invoke<Brief>("daily_brief", { root });
+
+export type SettingKey = "budget_usd" | "sentinel_enabled" | "sentinel_idle_min" | "composer";
+export const settingsGet = (key: SettingKey) => invoke<string | null>("settings_get", { key });
+export const settingsSet = (key: SettingKey, value: string) => invoke<void>("settings_set", { key, value });

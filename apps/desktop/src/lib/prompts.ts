@@ -74,3 +74,32 @@ export function parseVerdict(text: string | null): Verdict | null {
   if (v.includes("RESSALVAS")) return "ressalvas";
   return "pronto";
 }
+
+/**
+ * Sentinela: revisão leve e barata (esforço baixo) em background. Só bloqueantes,
+ * resposta curta e com um formato fácil de interpretar.
+ */
+export function sentinelPrompt(diff: string): string {
+  return `Você é a Sentinela: uma revisão rápida, em segundo plano, das alterações ainda não commitadas.
+Procure APENAS problemas bloqueantes (bugs prováveis, falhas de segurança, código quebrado, segredos expostos). Ignore estilo, nomes e sugestões.
+Você não pode executar comandos nem modificar arquivos; leia o código se precisar de contexto.
+
+Responda em uma destas formas, sem nada antes:
+- "Sentinela: nada bloqueante." se não houver problema;
+- "Sentinela: N problema(s)" seguido de uma linha por problema: "🔴 arquivo:linha — problema — correção".
+
+Diff:
+\`\`\`diff
+${truncate(diff)}
+\`\`\``;
+}
+
+/** Quantidade de problemas apontados pela Sentinela (0 = limpo; null = resposta fora do formato). */
+export function parseSentinel(text: string | null): number | null {
+  if (!text) return null;
+  if (/Sentinela:\s*nada bloqueante/i.test(text)) return 0;
+  const match = text.match(/Sentinela:\s*(\d+)\s*problema/i);
+  if (match) return Number(match[1]);
+  const bullets = text.split("\n").filter((l) => l.trim().startsWith("🔴")).length;
+  return bullets > 0 ? bullets : null;
+}
