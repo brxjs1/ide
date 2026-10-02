@@ -1,0 +1,15 @@
+{
+  "name": "ide",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @ide/desktop tauri dev",
+    "build": "pnpm --filter @ide/desktop tauri build",
+    "dev:web": "pnpm --filter @ide/desktop dev",
+    "typecheck": "pnpm -r typecheck",
+    "check": "pnpm typecheck && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+  }
+}
