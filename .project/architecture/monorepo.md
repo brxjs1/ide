@@ -44,6 +44,13 @@ Agente
     → ide_agent::AgentProcess ─stdin JSON lines→ packages/agent (AgentServer → SDK query())
     ←stdout JSON lines─ Outbound → grava timeline → emit("agent://message") → store Solid
   Permissão: SDK canUseTool → permission_request → cartão na UI → permission_response
+
+Tarefa (lib/tasks.ts)
+  task_create → ide_core::tasks::create (worktree task/<slug>, objetivo na config do branch)
+  → prompt na conversa "task:<slug>" em modo full (cwd = worktree)
+  → done sem erro → conversa "review:<slug>" é reiniciada e recebe o prompt de revisão
+    em modo review → veredito extraído do texto (lib/prompts.ts::parseVerdict)
+  → Integrar: task_merge (merge --no-ff) + task_discard
 ```
 
 ## Protocolo do agente
@@ -52,19 +59,33 @@ Definido em `packages/agent/src/protocol.ts` e espelhado em `crates/agent/src/li
 (enums serde) e `apps/desktop/src/lib/agent.ts`. **Mudou um, mude os três** — os testes
 de serialização em `crates/agent` pegam divergências de formato.
 
-| Autonomia | `permissionMode` do SDK | Aprovação na UI |
-|---|---|---|
-| `plan` | `plan` | — (nada é modificado) |
-| `assisted` | `default` | edições e comandos |
-| `autonomous` | `acceptEdits` | comandos |
+Cada mensagem carrega uma `conversation`. Cada conversa tem sua sessão do SDK e roda em
+paralelo às outras: `main` (chat), `task:<slug>` e `review:<slug>`.
 
-Sem aprovação nenhuma (`bypassPermissions`) só na Fase 2, e sempre dentro de um worktree.
+| Autonomia | `permissionMode` do SDK | Aprovação na UI | Restrição |
+|---|---|---|---|
+| `plan` | `plan` | — (nada é modificado) | — |
+| `assisted` | `default` | edições e comandos | — |
+| `autonomous` | `acceptEdits` | comandos | — |
+| `full` | `bypassPermissions` | nenhuma | só worktree de tarefa |
+| `review` | `bypassPermissions` + sem `Edit`/`Write` | nenhuma | só worktree de tarefa |
+
+A restrição é verificada em `agent_send` (Rust). Ver ADR 0002.
+
+## Empacotamento do sidecar
+
+`pnpm build` usa `src-tauri/tauri.bundle.conf.json`, que roda `scripts/bundle-sidecar.mjs`
+(build + `pnpm deploy --prod` com `node-linker=hoisted`, sem a variante de libc que não é
+a da máquina) e inclui `resources/agent/` no instalador. Em runtime o sidecar é procurado
+em `IDE_AGENT_SCRIPT` → recursos do app → `packages/agent/dist` (dev).
+
+`pnpm dev`, `pnpm check` e o CI não usam esse config, então não precisam do deploy.
 
 ## Variáveis de ambiente
 
 | Variável | Uso |
 |---|---|
-| `IDE_AGENT_SCRIPT` | caminho do sidecar (padrão: `packages/agent/dist/index.js` do build local) |
+| `IDE_AGENT_SCRIPT` | caminho do sidecar; tem prioridade sobre o empacotado e o build local |
 | `IDE_NODE` | executável do Node (padrão: `node` do PATH) |
 
 Para testar a UI sem gastar API, aponte `IDE_AGENT_SCRIPT` para um script que fale o
