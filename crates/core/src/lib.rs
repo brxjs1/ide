@@ -3,10 +3,12 @@
 
 pub mod diff;
 pub mod git;
+pub mod history;
 pub mod project;
 pub mod tasks;
 
 pub use diff::{ChangedFile, FileStatus};
+pub use history::Commit;
 pub use project::{ProjectInfo, Worktree};
 pub use tasks::Task;
 
