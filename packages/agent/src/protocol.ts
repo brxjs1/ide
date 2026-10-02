@@ -8,6 +8,15 @@
  */
 export type AutonomyMode = "plan" | "assisted" | "autonomous" | "full" | "review";
 
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+
+/** Para continuar uma conversa depois que o app (e o sidecar) reiniciou. */
+export interface Resume {
+  sessionId: string;
+  /** Último total_cost_usd da sessão, para o custo do próximo pedido sair incremental. */
+  costTotal: number;
+}
+
 /**
  * Cada conversa tem sua própria sessão do SDK e roda em paralelo às outras
  * (chat principal, uma por tarefa, uma por revisão).
@@ -21,6 +30,9 @@ export type Inbound =
       cwd: string;
       mode: AutonomyMode;
       model?: string;
+      effort?: Effort;
+      /** Usado só se o sidecar ainda não conhece a sessão desta conversa. */
+      resume?: Resume;
     }
   | { type: "permission_response"; id: string; allow: boolean; message?: string }
   | { type: "interrupt"; conversation: string }
@@ -50,7 +62,10 @@ export type Outbound =
       promptId: string;
       sessionId: string | null;
       isError: boolean;
+      /** Custo só deste pedido. */
       costUsd: number | null;
+      /** Total acumulado da sessão (guardar e devolver em `resume`). */
+      costTotal: number | null;
       durationMs: number | null;
       result: string | null;
     }

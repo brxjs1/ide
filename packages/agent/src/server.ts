@@ -60,6 +60,8 @@ interface Running {
 interface Conversation {
   sessionId: string | null;
   running: Running | null;
+  /** Último total_cost_usd visto: o SDK acumula o custo ao retomar a sessão. */
+  costTotal: number;
 }
 
 export class AgentServer {
@@ -112,7 +114,7 @@ export class AgentServer {
   private conversation(id: string): Conversation {
     let conv = this.conversations.get(id);
     if (!conv) {
-      conv = { sessionId: null, running: null };
+      conv = { sessionId: null, running: null, costTotal: 0 };
       this.conversations.set(id, conv);
     }
     return conv;
@@ -121,6 +123,10 @@ export class AgentServer {
   private async prompt(msg: Extract<Inbound, { type: "prompt" }>): Promise<void> {
     const conversation = msg.conversation;
     const conv = this.conversation(conversation);
+    if (!conv.sessionId && msg.resume) {
+      conv.sessionId = msg.resume.sessionId;
+      conv.costTotal = msg.resume.costTotal;
+    }
     if (conv.running) {
       this.send({ type: "error", conversation, promptId: msg.id, message: "esta conversa já está executando um pedido" });
       return;
@@ -140,6 +146,7 @@ export class AgentServer {
       canUseTool: this.canUseTool(conversation, msg.id),
       systemPrompt: { type: "preset", preset: "claude_code", append: SYSTEM_APPEND },
       ...(msg.model ? { model: msg.model } : {}),
+      ...(msg.effort ? { effort: msg.effort } : {}),
       ...(conv.sessionId ? { resume: conv.sessionId } : {}),
     };
 
@@ -156,13 +163,15 @@ export class AgentServer {
         }
         if (message.type === "result") {
           done = true;
+          const costUsd = incrementalCost(conv, message.total_cost_usd);
           this.send({
             type: "done",
             conversation,
             promptId: msg.id,
             sessionId: conv.sessionId,
             isError: message.is_error,
-            costUsd: message.total_cost_usd,
+            costUsd,
+            costTotal: conv.costTotal,
             durationMs: message.duration_ms,
             result: message.subtype === "success" ? message.result : message.errors.join("\n") || message.subtype,
           });
@@ -186,6 +195,7 @@ export class AgentServer {
           sessionId: conv.sessionId,
           isError: true,
           costUsd: null,
+          costTotal: null,
           durationMs: null,
           result: null,
         });
@@ -226,6 +236,17 @@ export class AgentServer {
       running.abort.abort();
     }
   }
+}
+
+/**
+ * Custo só deste pedido. `total_cost_usd` é cumulativo dentro de uma sessão retomada
+ * (o primeiro resultado já carrega os turnos anteriores); somar os totais contaria em
+ * dobro. Se o total voltar a ser menor (sessão sem total salvo), ele é o próprio custo.
+ */
+export function incrementalCost(conv: { costTotal: number }, total: number): number {
+  const cost = total >= conv.costTotal ? total - conv.costTotal : total;
+  conv.costTotal = total;
+  return cost;
 }
 
 /** Converte uma mensagem do SDK nos eventos que a UI entende. */

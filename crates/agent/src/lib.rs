@@ -35,6 +35,24 @@ pub enum AutonomyMode {
     Review,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Effort {
+    Low,
+    Medium,
+    High,
+    Xhigh,
+    Max,
+}
+
+/// Para continuar uma conversa depois que o app (e o sidecar) reiniciou.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Resume {
+    pub session_id: String,
+    pub cost_total: f64,
+}
+
 impl AutonomyMode {
     /// Modos sem aprovação, que só podem rodar dentro de um worktree de tarefa.
     pub fn requires_task_worktree(self) -> bool {
@@ -51,8 +69,12 @@ pub enum Inbound {
         text: String,
         cwd: String,
         mode: AutonomyMode,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         model: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        effort: Option<Effort>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        resume: Option<Resume>,
     },
     PermissionResponse {
         id: String,
@@ -122,6 +144,8 @@ pub enum Outbound {
         session_id: Option<String>,
         is_error: bool,
         cost_usd: Option<f64>,
+        #[serde(default)]
+        cost_total: Option<f64>,
         duration_ms: Option<f64>,
         result: Option<String>,
     },
@@ -278,10 +302,18 @@ mod tests {
             cwd: "/p".into(),
             mode: AutonomyMode::Full,
             model: None,
+            effort: Some(Effort::Xhigh),
+            resume: Some(Resume {
+                session_id: "s".into(),
+                cost_total: 0.5,
+            }),
         };
         assert_eq!(
             serde_json::to_value(&prompt).unwrap(),
-            json!({"type": "prompt", "conversation": "main", "id": "p1", "text": "oi", "cwd": "/p", "mode": "full"})
+            json!({
+                "type": "prompt", "conversation": "main", "id": "p1", "text": "oi", "cwd": "/p",
+                "mode": "full", "effort": "xhigh", "resume": {"sessionId": "s", "costTotal": 0.5}
+            })
         );
         assert_eq!(
             serde_json::to_value(Inbound::Interrupt {
@@ -389,6 +421,8 @@ mod tests {
                 cwd: "/".into(),
                 mode: AutonomyMode::Plan,
                 model: None,
+                effort: None,
+                resume: None,
             })
             .unwrap();
         assert_eq!(

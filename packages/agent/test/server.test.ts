@@ -4,7 +4,7 @@ import { test } from "node:test";
 import type { Options, SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 
 import type { AutonomyMode, Outbound } from "../src/protocol.ts";
-import { AgentServer, type QueryFn, permissionModeFor } from "../src/server.ts";
+import { AgentServer, type QueryFn, incrementalCost, permissionModeFor } from "../src/server.ts";
 
 // Mensagens do SDK reduzidas ao que o servidor lê.
 const init = (session = "s1") => ({
@@ -100,6 +100,7 @@ test("converte mensagens do SDK em eventos e conclui com done", async () => {
     sessionId: "s1",
     isError: false,
     costUsd: 0.01,
+    costTotal: 0.01,
     durationMs: 5,
     result: "fim",
   });
@@ -263,4 +264,63 @@ test("mapeia autonomia para modo de permissão do SDK", () => {
   assert.equal(permissionModeFor("autonomous"), "acceptEdits");
   assert.equal(permissionModeFor("full"), "bypassPermissions");
   assert.equal(permissionModeFor("review"), "bypassPermissions");
+});
+
+test("custo por pedido desconta o total acumulado da sessão retomada", async () => {
+  const { out, send } = collect();
+  const totals = [0.1, 0.25, 0.25];
+  let call = 0;
+  const server = new AgentServer(
+    fakeQuery(async function* () {
+      yield { ...result(), total_cost_usd: totals[call++] };
+    }),
+    send,
+  );
+
+  await prompt(server, "p1");
+  await prompt(server, "p2");
+  await prompt(server, "p3");
+  await server.handle({ type: "reset", conversation: "main" });
+  totals.push(0.05);
+  await prompt(server, "p4");
+
+  const costs = out.flatMap((m) => (m.type === "done" ? [m.costUsd] : []));
+  assert.deepEqual(
+    costs.map((c) => Math.round((c ?? 0) * 1000) / 1000),
+    [0.1, 0.15, 0, 0.05],
+  );
+});
+
+test("total menor que o anterior (sessão sem total salvo) conta inteiro", () => {
+  const conv = { costTotal: 0.5 };
+  assert.equal(incrementalCost(conv, 0.2), 0.2);
+  assert.equal(conv.costTotal, 0.2);
+});
+
+test("retoma sessão e custo de uma conversa vinda de antes do reinício", async () => {
+  const { out, send } = collect();
+  const calls: Options[] = [];
+  const server = new AgentServer(
+    fakeQuery(async function* () {
+      yield { ...result("s-antiga"), total_cost_usd: 0.4 };
+    }, calls),
+    send,
+  );
+
+  await server.handle({
+    type: "prompt",
+    conversation: "t:1",
+    id: "p1",
+    text: "x",
+    cwd: "/p",
+    mode: "plan",
+    effort: "xhigh",
+    resume: { sessionId: "s-antiga", costTotal: 0.3 },
+  });
+
+  assert.equal(calls[0]?.resume, "s-antiga");
+  assert.equal(calls[0]?.effort, "xhigh");
+  const done = out.find((m) => m.type === "done");
+  assert.equal(done?.type === "done" && Math.round(done.costUsd! * 100) / 100, 0.1);
+  assert.equal(done?.type === "done" && done.costTotal, 0.4);
 });
