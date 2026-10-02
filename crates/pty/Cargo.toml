@@ -1,0 +1,10 @@
+[package]
+name = "ide-pty"
+description = "Terminais (PTY): criar, escrever, redimensionar e encerrar processos."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+portable-pty = "0.9"
+thiserror.workspace = true
