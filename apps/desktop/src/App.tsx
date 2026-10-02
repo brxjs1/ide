@@ -104,7 +104,8 @@ export default function App() {
                   <TimelinePanel project={p().root} />
                 </Show>
               </div>
-              <Terminal cwd={p().root} />
+              {/* Comandos no terminal (git commit, edições...) mudam o estado do git. */}
+              <Terminal cwd={p().root} onSettled={refresh} />
             </main>
           </div>
         )}

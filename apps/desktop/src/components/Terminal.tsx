@@ -8,18 +8,29 @@ import { ptyKill, ptyResize, ptySpawn, ptyWrite } from "../lib/ipc";
 const DARK = { background: "#141417", foreground: "#e6e6ea", cursor: "#7b9cff", selectionBackground: "#3a3f55" };
 const LIGHT = { background: "#ffffff", foreground: "#1d1d20", cursor: "#3b6ef5", selectionBackground: "#cdd8ff" };
 
-export default function Terminal(props: { cwd: string }) {
+/** Espera da saída "assentar" antes de avisar atividade (um comando terminou, em geral). */
+const SETTLE_MS = 800;
+
+export default function Terminal(props: { cwd: string; onSettled?: () => void }) {
   let host!: HTMLDivElement;
   const [exited, setExited] = createSignal<number | null>(null);
   let id: number | null = null;
   let term: XTerm;
   let fit: FitAddon;
+  let settle: ReturnType<typeof setTimeout> | undefined;
+  const activity = () => {
+    clearTimeout(settle);
+    settle = setTimeout(() => props.onSettled?.(), SETTLE_MS);
+  };
 
   const start = async () => {
     setExited(null);
     term.reset();
     id = await ptySpawn(props.cwd, term.rows, term.cols, {
-      onData: (bytes) => term.write(bytes),
+      onData: (bytes) => {
+        term.write(bytes);
+        activity();
+      },
       onExit: (code) => {
         id = null;
         setExited(code);
@@ -57,6 +68,7 @@ export default function Terminal(props: { cwd: string }) {
     void start();
 
     onCleanup(() => {
+      clearTimeout(settle);
       observer.disconnect();
       if (id !== null) void ptyKill(id);
       term.dispose();
