@@ -1504,6 +1504,7 @@ dependencies = [
 name = "ide-desktop"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "ide-agent",
  "ide-core",
  "ide-pty",

@@ -1,4 +1,5 @@
 mod agent;
+mod budget;
 mod commands;
 mod state;
 mod terminal;
@@ -26,6 +27,9 @@ pub fn run() {
             commands::task_diff,
             commands::task_merge,
             commands::task_discard,
+            commands::settings_get,
+            commands::settings_set,
+            commands::daily_brief,
             terminal::pty_spawn,
             terminal::pty_write,
             terminal::pty_resize,
