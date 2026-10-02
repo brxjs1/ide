@@ -1,57 +1,87 @@
-import { For, Match, Show, Switch, createResource } from "solid-js";
+import { Match, Show, Switch, createResource, createSignal, onCleanup } from "solid-js";
 
-import { isTauri, projectInfo } from "./lib/ipc";
+import AgentPanel from "./components/AgentPanel";
+import DiffPanel from "./components/DiffPanel";
+import Sidebar from "./components/Sidebar";
+import Terminal from "./components/Terminal";
+import TimelinePanel from "./components/TimelinePanel";
+import { onAgentDone } from "./lib/agent";
+import { changedFiles, isTauri, projectInfo } from "./lib/ipc";
+
+type Tab = "agent" | "diff" | "timeline";
 
 export default function App() {
-  const [project, { refetch }] = createResource(() => (isTauri() ? projectInfo() : null));
+  const [version, setVersion] = createSignal(0);
+  const refresh = () => setVersion((v) => v + 1);
+
+  const [project] = createResource(version, () => (isTauri() ? projectInfo() : null));
+  const [files] = createResource(
+    () => project() && { root: project()!.root, v: version() },
+    ({ root }) => changedFiles(root),
+  );
+  const [tab, setTab] = createSignal<Tab>("agent");
+  const [selected, setSelected] = createSignal<string | null>(null);
+
+  // O agente e o terminal mudam arquivos: atualiza git ao fim de cada execução e ao focar a janela.
+  onCleanup(onAgentDone(refresh));
+  window.addEventListener("focus", refresh);
+  onCleanup(() => window.removeEventListener("focus", refresh));
 
   return (
-    <div class="shell">
-      <aside class="sidebar">
-        <h1>ide</h1>
-        <Switch>
-          <Match when={!isTauri()}>
-            <p class="muted">Rodando fora do Tauri. Use <code>pnpm dev</code> na raiz.</p>
-          </Match>
-          <Match when={project.error}>
-            <p class="error">{String(project.error)}</p>
-          </Match>
-          <Match when={project()}>
-            {(p) => (
-              <>
-                <section>
-                  <h2>{p().name}</h2>
-                  <p class="mono">
-                    {p().branch ?? "HEAD destacado"}
-                    <Show when={p().head}> @ {p().head}</Show>
-                    <Show when={p().dirty}>
-                      <span class="badge">alterado</span>
-                    </Show>
-                  </p>
-                </section>
-                <section>
-                  <h3>Worktrees</h3>
-                  <ul>
-                    <For each={p().worktrees}>
-                      {(w) => (
-                        <li class="mono" title={w.path}>
-                          {w.branch ?? "(destacado)"}
-                        </li>
-                      )}
-                    </For>
-                  </ul>
-                </section>
-              </>
-            )}
-          </Match>
-        </Switch>
-        <Show when={isTauri()}>
-          <button onClick={() => refetch()}>Atualizar</button>
-        </Show>
-      </aside>
-      <main class="main">
-        <p class="muted">Chat do agente, diff e terminal entram aqui (Fase 1).</p>
-      </main>
-    </div>
+    <Switch>
+      <Match when={!isTauri()}>
+        <p class="empty muted">
+          Rodando fora do Tauri. Use <code>pnpm dev</code> na raiz.
+        </p>
+      </Match>
+      <Match when={project.error}>
+        <p class="empty error">{String(project.error)}</p>
+      </Match>
+      <Match when={project()}>
+        {(p) => (
+          <div class="shell">
+            <Sidebar
+              project={p()}
+              files={files() ?? []}
+              selected={selected()}
+              onRefresh={refresh}
+              onSelect={(path) => {
+                setSelected(path);
+                setTab("diff");
+              }}
+            />
+            <main class="main">
+              <nav class="tabs">
+                <button classList={{ active: tab() === "agent" }} onClick={() => setTab("agent")}>
+                  Agente
+                </button>
+                <button classList={{ active: tab() === "diff" }} onClick={() => setTab("diff")}>
+                  Diff
+                  <Show when={files()?.length}>
+                    <span class="count">{files()!.length}</span>
+                  </Show>
+                </button>
+                <button classList={{ active: tab() === "timeline" }} onClick={() => setTab("timeline")}>
+                  Timeline
+                </button>
+              </nav>
+              <div class="content">
+                {/* O chat fica montado para não perder o scroll ao trocar de aba. */}
+                <div class="pane" hidden={tab() !== "agent"}>
+                  <AgentPanel cwd={p().root} />
+                </div>
+                <Show when={tab() === "diff"}>
+                  <DiffPanel root={p().root} path={selected()} version={version()} />
+                </Show>
+                <Show when={tab() === "timeline"}>
+                  <TimelinePanel project={p().root} />
+                </Show>
+              </div>
+              <Terminal cwd={p().root} />
+            </main>
+          </div>
+        )}
+      </Match>
+    </Switch>
   );
 }

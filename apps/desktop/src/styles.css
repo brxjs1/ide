@@ -1,11 +1,19 @@
 :root {
   --bg: #fafafa;
   --panel: #f0f0f2;
+  --raised: #ffffff;
   --fg: #1d1d20;
   --muted: #6b6b75;
   --accent: #3b6ef5;
+  --accent-fg: #ffffff;
   --error: #c62828;
+  --ok: #2e7d32;
+  --warn: #b26a00;
   --border: #dcdce2;
+  --add-bg: #e6f4ea;
+  --add-fg: #1b5e20;
+  --del-bg: #fdecea;
+  --del-fg: #b71c1c;
   --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
   color-scheme: light dark;
   font-family: Inter, system-ui, sans-serif;
@@ -16,11 +24,19 @@
   :root {
     --bg: #18181b;
     --panel: #212126;
+    --raised: #26262c;
     --fg: #e6e6ea;
     --muted: #8e8e99;
     --accent: #7b9cff;
+    --accent-fg: #101014;
     --error: #ef5350;
+    --ok: #66bb6a;
+    --warn: #ffb74d;
     --border: #2e2e35;
+    --add-bg: #1b2e22;
+    --add-fg: #9be3a8;
+    --del-bg: #351c1f;
+    --del-fg: #f5a3a3;
   }
 }
 
@@ -28,37 +44,17 @@
   box-sizing: border-box;
 }
 
-body {
+html,
+body,
+#root {
+  height: 100%;
   margin: 0;
+}
+
+body {
   background: var(--bg);
   color: var(--fg);
-}
-
-.shell {
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  height: 100vh;
-}
-
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 16px;
-  background: var(--panel);
-  border-right: 1px solid var(--border);
-  overflow-y: auto;
-}
-
-.main {
-  display: grid;
-  place-items: center;
-  padding: 16px;
-}
-
-h1 {
-  margin: 0;
-  font-size: 16px;
+  overflow: hidden;
 }
 
 h2 {
@@ -67,47 +63,445 @@ h2 {
 }
 
 h3 {
-  margin: 0 0 4px;
-  font-size: 12px;
+  margin: 0;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--muted);
 }
 
-ul {
-  margin: 0;
-  padding-left: 16px;
-}
-
-.mono,
-code {
+pre,
+code,
+.mono {
   font-family: var(--mono);
   font-size: 12px;
+}
+
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .muted {
   color: var(--muted);
 }
 
+.small {
+  font-size: 12px;
+}
+
 .error {
   color: var(--error);
 }
 
-.badge {
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 999px;
+.ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grow {
+  flex: 1;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.empty {
+  padding: 32px;
+  text-align: center;
+}
+
+button,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button,
+select {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--raised);
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.primary {
   background: var(--accent);
-  color: var(--bg);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+button.ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+/* Layout */
+
+.shell {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  height: 100vh;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px 12px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.section-head button {
+  padding: 0 6px;
+}
+
+ul.files,
+ul.plain {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.file {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 3px 6px;
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+
+.file.active,
+.file:hover {
+  background: var(--raised);
+}
+
+.status {
+  flex: none;
+  width: 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.status-added,
+.status-untracked {
+  color: var(--ok);
+}
+
+.status-modified,
+.status-renamed {
+  color: var(--warn);
+}
+
+.status-deleted,
+.status-conflicted {
+  color: var(--error);
+}
+
+.main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) 260px;
+  /* Altura fixa: o chat rola por dentro em vez de empurrar o terminal para fora. */
+  height: 100vh;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs button {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.tabs button.active {
+  border-bottom-color: var(--accent);
+  color: var(--fg);
+}
+
+.count {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--panel);
   font-size: 11px;
 }
 
-button {
-  align-self: flex-start;
-  padding: 6px 12px;
+.content {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.content > * {
+  height: 100%;
+}
+
+.pane[hidden] {
+  display: none;
+}
+
+/* Agente */
+
+.agent {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.msg {
+  max-width: 80ch;
+  padding: 8px 12px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.msg.user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.msg.assistant {
+  background: var(--raised);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--fg);
+}
+
+.msg.error {
+  background: var(--del-bg);
+  color: var(--del-fg);
+}
+
+.tool {
+  max-width: 80ch;
+  padding: 4px 10px;
+  border-left: 3px solid var(--border);
+}
+
+.tool.error {
+  border-left-color: var(--error);
+}
+
+.tool summary {
+  display: flex;
+  gap: 8px;
   cursor: pointer;
+}
+
+.tool pre {
+  margin-top: 6px;
+  padding: 8px;
+  max-height: 260px;
+  overflow: auto;
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.permission {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  max-width: 80ch;
+  padding: 10px 12px;
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+}
+
+.permission pre {
+  margin-top: 6px;
+}
+
+.permission.allowed,
+.permission.denied {
+  border-color: var(--border);
+  opacity: 0.7;
+}
+
+.done.error {
+  color: var(--error);
+}
+
+.working {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.composer textarea {
+  width: 100%;
+  padding: 8px 10px;
+  resize: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--raised);
+}
+
+.composer-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Diff */
+
+.diff {
+  overflow: auto;
+}
+
+.diff-body {
+  padding: 8px 0;
+  white-space: pre;
+}
+
+.diff-body > div {
+  padding: 0 16px;
+}
+
+.diff-body .add {
+  background: var(--add-bg);
+  color: var(--add-fg);
+}
+
+.diff-body .del {
+  background: var(--del-bg);
+  color: var(--del-fg);
+}
+
+.diff-body .hunk {
+  color: var(--accent);
+}
+
+.diff-body .meta {
+  color: var(--muted);
+}
+
+/* Timeline */
+
+.timeline {
+  overflow-y: auto;
+}
+
+.timeline ol {
+  margin: 0;
+  padding: 8px 16px;
+  list-style: none;
+}
+
+.timeline .day {
+  margin: 12px 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.timeline .event {
+  display: grid;
+  grid-template-columns: 64px 120px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.kind {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.kind-agent {
+  color: var(--accent);
+}
+
+.kind-terminal {
+  color: var(--ok);
+}
+
+/* Terminal */
+
+.terminal {
+  --term-bg: #ffffff;
+  position: relative;
+  min-height: 0;
+  padding: 6px 0 4px 8px;
+  border-top: 1px solid var(--border);
+  background: var(--term-bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  .terminal {
+    --term-bg: #141417;
+  }
+}
+
+.terminal-host {
+  height: 100%;
+}
+
+/* O xterm.css pinta o viewport de preto; o fundo real vem do tema (Terminal.tsx). */
+.terminal .xterm,
+.terminal .xterm-viewport {
+  background-color: var(--term-bg) !important;
+}
+
+.terminal-restart {
+  position: absolute;
+  top: 8px;
+  right: 12px;
 }
