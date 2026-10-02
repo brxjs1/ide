@@ -40,7 +40,7 @@ BREAKING CHANGE: <descrição, se houver>
 
 Escopos válidos refletem módulos do projeto. Atualize a lista quando surgir um módulo:
 
-`core`, `ui`, `agent`, `brain`, `git`, `pty`, `lsp`, `index`, `timeline`, `scripts`, `deps`
+`core`, `desktop`, `ui`, `agent`, `brain`, `git`, `pty`, `lsp`, `index`, `timeline`, `scripts`, `deps`, `ci`
 
 ## Estrutura (o que vai em cada commit)
 

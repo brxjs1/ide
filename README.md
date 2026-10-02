@@ -3,6 +3,28 @@
 Ambiente de desenvolvimento sob medida, local-first, construído em volta de um agente.
 Visão completa e fases em [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
+## App desktop (Tauri 2 + SolidJS)
+
+Monorepo com pnpm workspaces + Cargo workspace. Estrutura e regras em
+[`.project/architecture/monorepo.md`](.project/architecture/monorepo.md).
+
+```text
+apps/desktop/        @ide/desktop — UI Solid + src-tauri (comandos finos)
+crates/core/         ide-core — lógica pura em Rust (git, projeto, worktrees)
+packages/            (futuro) sidecar do agente
+```
+
+Pré-requisitos: Node ≥ 22, pnpm 10, Rust stable e as
+[dependências de sistema do Tauri](https://v2.tauri.app/start/prerequisites/)
+(no Linux: `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev`).
+
+```bash
+pnpm install
+pnpm dev        # abre o app com hot reload
+pnpm check      # typecheck + fmt + clippy + testes
+pnpm build      # instaladores em target/release/bundle
+```
+
 ## Fase 0 — usar hoje com Claude Code
 
 ```bash

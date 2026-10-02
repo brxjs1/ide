@@ -20,8 +20,15 @@ não trivial, leia o que for relevante:
 - Quando o usuário te corrigir com uma regra geral, proponha a linha exata para
   `.project/conventions/` ou `.project/memory/` — não edite sem aprovação.
 
-## Setup
+## Código
+
+Monorepo Tauri 2 + SolidJS — ver `.project/architecture/monorepo.md`.
+Lógica vive em `crates/`; `apps/desktop/src-tauri/` só tem comandos finos.
+
+## Setup e verificação
 
 ```bash
 scripts/install-hooks.sh   # ativa .githooks (commit-msg)
+pnpm install
+pnpm check                 # rode antes de propor qualquer commit
 ```

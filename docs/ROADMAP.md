@@ -102,7 +102,7 @@ SolidJS UI: chat · diff · terminal · timeline · (Monaco, fase 3)
 | Fase | Entrega | Status |
 |---|---|---|
 | 0 | Kit com Claude Code: Brain, agentes, skills, hooks, scripts (este repo) | ✅ |
-| 1 | Shell Tauri: chat (sidecar SDK), diff, terminal PTY, timeline SQLite | — |
+| 1 | Shell Tauri: chat (sidecar SDK), diff, terminal PTY, timeline SQLite | 🚧 monorepo + IPC prontos |
 | 2 | Worktree por tarefa na UI, níveis de autonomia, pipeline de revisão | — |
 | 3 | Monaco, LSP, tree-sitter como tools MCP | — |
 | 4 | Background agent, daily brief, debugger, embeddings | — |
