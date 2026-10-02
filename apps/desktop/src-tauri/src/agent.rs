@@ -1,4 +1,7 @@
+use std::path::Path;
+
 use ide_agent::{AgentEvent, AgentProcess, Inbound, Outbound, SidecarCommand};
+use ide_core::tasks;
 use ide_timeline::{kind, NewEvent};
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -17,6 +20,7 @@ pub fn agent_send(
     message: Inbound,
 ) -> Result<(), String> {
     if let Inbound::Prompt {
+        conversation,
         id,
         text,
         cwd,
@@ -24,11 +28,17 @@ pub fn agent_send(
         ..
     } = &message
     {
-        lock(&state.prompts).insert(id.clone(), cwd.clone());
+        // Autonomia total nunca roda no branch do usuário: só dentro de um worktree de tarefa.
+        if mode.requires_task_worktree() && !tasks::is_task_worktree(Path::new(cwd)) {
+            return Err("autonomia total só é permitida dentro de um worktree de tarefa".into());
+        }
+        let project = project_of(cwd);
+        lock(&state.prompts).insert(id.clone(), project.clone());
         state.record(
             &app,
-            NewEvent::new(cwd.clone(), kind::AGENT_PROMPT, truncate(text, 140))
-                .with_data(json!({ "promptId": id, "mode": mode })),
+            NewEvent::new(project, kind::AGENT_PROMPT, truncate(text, 140)).with_data(
+                json!({ "promptId": id, "conversation": conversation, "mode": mode, "cwd": cwd }),
+            ),
         );
     }
 
@@ -87,6 +97,7 @@ fn record_outbound(app: &AppHandle, msg: &Outbound) {
         Outbound::Event {
             prompt_id,
             event: AgentEvent::ToolUse { name, input, .. },
+            ..
         } => project(prompt_id).map(|p| {
             NewEvent::new(p, kind::AGENT_TOOL, tool_summary(name, input))
                 .with_data(json!({ "promptId": prompt_id, "tool": name, "input": input }))
@@ -111,6 +122,7 @@ fn record_outbound(app: &AppHandle, msg: &Outbound) {
         Outbound::Error {
             prompt_id: Some(prompt_id),
             message,
+            ..
         } => project(prompt_id).map(|p| {
             NewEvent::new(p, kind::AGENT_ERROR, truncate(message, 140))
                 .with_data(json!({ "promptId": prompt_id }))
@@ -121,6 +133,13 @@ fn record_outbound(app: &AppHandle, msg: &Outbound) {
     if let Some(event) = event {
         state.record(app, event);
     }
+}
+
+/// Eventos de tarefas aparecem na timeline do projeto principal.
+fn project_of(cwd: &str) -> String {
+    tasks::main_root(Path::new(cwd))
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| cwd.to_owned())
 }
 
 /// "Read src/main.rs", "Bash cargo test"... usando o campo mais descritivo do input.

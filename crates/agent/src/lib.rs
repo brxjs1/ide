@@ -28,12 +28,25 @@ pub enum AutonomyMode {
     Plan,
     Assisted,
     Autonomous,
+    /// Sem aprovações. Só pode ser enviado com `cwd` dentro de um worktree de tarefa;
+    /// quem garante isso é o app (ver `ide_core::tasks::is_task_worktree`).
+    Full,
+    /// Como `Full`, mas sem ferramentas de edição: para revisar e rodar testes.
+    Review,
+}
+
+impl AutonomyMode {
+    /// Modos sem aprovação, que só podem rodar dentro de um worktree de tarefa.
+    pub fn requires_task_worktree(self) -> bool {
+        matches!(self, Self::Full | Self::Review)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Inbound {
     Prompt {
+        conversation: String,
         id: String,
         text: String,
         cwd: String,
@@ -47,8 +60,12 @@ pub enum Inbound {
         #[serde(skip_serializing_if = "Option::is_none")]
         message: Option<String>,
     },
-    Interrupt,
-    Reset,
+    Interrupt {
+        conversation: String,
+    },
+    Reset {
+        conversation: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -88,16 +105,19 @@ pub enum AgentEvent {
 pub enum Outbound {
     Ready,
     Event {
+        conversation: String,
         prompt_id: String,
         event: AgentEvent,
     },
     PermissionRequest {
+        conversation: String,
         id: String,
         prompt_id: String,
         tool_name: String,
         input: serde_json::Value,
     },
     Done {
+        conversation: String,
         prompt_id: String,
         session_id: Option<String>,
         is_error: bool,
@@ -106,6 +126,7 @@ pub enum Outbound {
         result: Option<String>,
     },
     Error {
+        conversation: Option<String>,
         prompt_id: Option<String>,
         message: String,
     },
@@ -173,6 +194,7 @@ impl AgentProcess {
                     }
                     on_message(
                         serde_json::from_str(&line).unwrap_or_else(|e| Outbound::Error {
+                            conversation: None,
                             prompt_id: None,
                             message: format!("mensagem inválida do agente ({e}): {line}"),
                         }),
@@ -232,32 +254,54 @@ mod tests {
     #[test]
     fn serializa_inbound_no_formato_do_sidecar() {
         let prompt = Inbound::Prompt {
+            conversation: "main".into(),
             id: "p1".into(),
             text: "oi".into(),
             cwd: "/p".into(),
-            mode: AutonomyMode::Assisted,
+            mode: AutonomyMode::Full,
             model: None,
         };
         assert_eq!(
             serde_json::to_value(&prompt).unwrap(),
-            json!({"type": "prompt", "id": "p1", "text": "oi", "cwd": "/p", "mode": "assisted"})
+            json!({"type": "prompt", "conversation": "main", "id": "p1", "text": "oi", "cwd": "/p", "mode": "full"})
         );
         assert_eq!(
-            serde_json::to_value(Inbound::Interrupt).unwrap(),
-            json!({"type": "interrupt"})
+            serde_json::to_value(Inbound::Interrupt {
+                conversation: "task:x".into()
+            })
+            .unwrap(),
+            json!({"type": "interrupt", "conversation": "task:x"})
         );
+    }
+
+    #[test]
+    fn so_full_e_review_exigem_worktree_de_tarefa() {
+        let modes = [
+            AutonomyMode::Plan,
+            AutonomyMode::Assisted,
+            AutonomyMode::Autonomous,
+            AutonomyMode::Full,
+            AutonomyMode::Review,
+        ];
+        let gated: Vec<_> = modes
+            .iter()
+            .filter(|m| m.requires_task_worktree())
+            .map(|m| serde_json::to_value(m).unwrap())
+            .collect();
+        assert_eq!(gated, [json!("full"), json!("review")]);
     }
 
     #[test]
     fn interpreta_outbound_do_sidecar() {
         let event: Outbound = serde_json::from_value(json!({
-            "type": "event", "promptId": "p1",
+            "type": "event", "conversation": "main", "promptId": "p1",
             "event": {"kind": "tool_result", "toolUseId": "t1", "isError": false, "content": "ok"}
         }))
         .unwrap();
         assert_eq!(
             event,
             Outbound::Event {
+                conversation: "main".into(),
                 prompt_id: "p1".into(),
                 event: AgentEvent::ToolResult {
                     tool_use_id: "t1".into(),
@@ -268,7 +312,7 @@ mod tests {
         );
 
         let done: Outbound = serde_json::from_value(json!({
-            "type": "done", "promptId": "p1", "sessionId": null, "isError": false,
+            "type": "done", "conversation": "main", "promptId": "p1", "sessionId": null, "isError": false,
             "costUsd": 0.5, "durationMs": 10, "result": "fim"
         }))
         .unwrap();
@@ -282,8 +326,8 @@ mod tests {
         out({ type: "ready" });
         rl.on("line", (l) => {
           const m = JSON.parse(l);
-          out({ type: "event", promptId: m.id, event: { kind: "text", text: "eco: " + m.text } });
-          out({ type: "done", promptId: m.id, sessionId: "s", isError: false, costUsd: null, durationMs: null, result: null });
+          out({ type: "event", conversation: m.conversation, promptId: m.id, event: { kind: "text", text: "eco: " + m.text } });
+          out({ type: "done", conversation: m.conversation, promptId: m.id, sessionId: "s", isError: false, costUsd: null, durationMs: null, result: null });
           console.log("não é json");
         });
     "#;
@@ -307,6 +351,7 @@ mod tests {
 
         agent
             .send(&Inbound::Prompt {
+                conversation: "main".into(),
                 id: "p1".into(),
                 text: "oi".into(),
                 cwd: "/".into(),
@@ -317,6 +362,7 @@ mod tests {
         assert_eq!(
             next(),
             Outbound::Event {
+                conversation: "main".into(),
                 prompt_id: "p1".into(),
                 event: AgentEvent::Text {
                     text: "eco: oi".into()
@@ -331,7 +377,9 @@ mod tests {
         agent.stop();
         exit_rx.recv_timeout(Duration::from_secs(10)).unwrap();
         assert!(matches!(
-            agent.send(&Inbound::Reset),
+            agent.send(&Inbound::Reset {
+                conversation: "main".into()
+            }),
             Err(Error::NotRunning)
         ));
     }

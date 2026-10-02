@@ -22,8 +22,11 @@ const SYSTEM_APPEND = [
 /**
  * plan       → só lê e planeja; nada é modificado.
  * assisted   → leituras automáticas; edições e comandos pedem aprovação na UI.
- * autonomous → edições automáticas; comandos ainda pedem aprovação. O modo sem
- *              nenhuma aprovação fica para a Fase 2, sempre dentro de um worktree.
+ * autonomous → edições automáticas; comandos ainda pedem aprovação.
+ * full       → nenhuma aprovação. O app só envia este modo com cwd dentro de um
+ *              worktree de tarefa (crates/core::tasks), nunca no branch do usuário.
+ * review     → como full, mas sem ferramentas de edição (ver EDIT_TOOLS): o revisor
+ *              roda testes sem poder "consertar" o que está revisando.
  */
 export function permissionModeFor(mode: AutonomyMode): PermissionMode {
   switch (mode) {
@@ -33,17 +36,35 @@ export function permissionModeFor(mode: AutonomyMode): PermissionMode {
       return "default";
     case "autonomous":
       return "acceptEdits";
+    case "full":
+    case "review":
+      return "bypassPermissions";
   }
 }
 
+/** Ferramentas removidas do contexto no modo review. */
+export const EDIT_TOOLS = ["Edit", "MultiEdit", "Write", "NotebookEdit"];
+
 interface Pending {
+  conversation: string;
   promptId: string;
   resolve: (result: PermissionResult) => void;
 }
 
+interface Running {
+  promptId: string;
+  abort: AbortController;
+  interrupt?: () => Promise<unknown>;
+}
+
+interface Conversation {
+  sessionId: string | null;
+  running: Running | null;
+}
+
 export class AgentServer {
-  private sessionId: string | null = null;
-  private running: { promptId: string; abort: AbortController; interrupt?: () => Promise<unknown> } | null = null;
+  private conversations = new Map<string, Conversation>();
+  /** Pedidos de permissão em aberto, de todas as conversas (ids são globais). */
   private pending = new Map<string, Pending>();
   private nextPermissionId = 0;
   private readonly queryFn: QueryFn;
@@ -54,8 +75,13 @@ export class AgentServer {
     this.send = send;
   }
 
+  /** Alguma conversa está executando? */
   get busy(): boolean {
-    return this.running !== null;
+    return [...this.conversations.values()].some((c) => c.running !== null);
+  }
+
+  isRunning(conversation: string): boolean {
+    return this.conversations.get(conversation)?.running != null;
   }
 
   async handle(msg: Inbound): Promise<void> {
@@ -65,53 +91,76 @@ export class AgentServer {
       case "permission_response":
         return this.resolvePermission(msg.id, msg.allow, msg.message);
       case "interrupt":
-        return this.interrupt();
-      case "reset":
-        if (this.running) {
-          this.send({ type: "error", promptId: null, message: "não é possível reiniciar durante uma execução" });
+        return this.interrupt(msg.conversation);
+      case "reset": {
+        const conv = this.conversations.get(msg.conversation);
+        if (conv?.running) {
+          this.send({
+            type: "error",
+            conversation: msg.conversation,
+            promptId: null,
+            message: "não é possível reiniciar durante uma execução",
+          });
           return;
         }
-        this.sessionId = null;
+        this.conversations.delete(msg.conversation);
         return;
+      }
     }
   }
 
+  private conversation(id: string): Conversation {
+    let conv = this.conversations.get(id);
+    if (!conv) {
+      conv = { sessionId: null, running: null };
+      this.conversations.set(id, conv);
+    }
+    return conv;
+  }
+
   private async prompt(msg: Extract<Inbound, { type: "prompt" }>): Promise<void> {
-    if (this.running) {
-      this.send({ type: "error", promptId: msg.id, message: "o agente já está executando um pedido" });
+    const conversation = msg.conversation;
+    const conv = this.conversation(conversation);
+    if (conv.running) {
+      this.send({ type: "error", conversation, promptId: msg.id, message: "esta conversa já está executando um pedido" });
       return;
     }
 
     const abort = new AbortController();
-    this.running = { promptId: msg.id, abort };
+    const running: Running = { promptId: msg.id, abort };
+    conv.running = running;
+    const mode = permissionModeFor(msg.mode);
 
     const options: Options = {
       cwd: msg.cwd,
       abortController: abort,
-      permissionMode: permissionModeFor(msg.mode),
-      canUseTool: this.canUseTool(msg.id),
+      permissionMode: mode,
+      ...(mode === "bypassPermissions" ? { allowDangerouslySkipPermissions: true } : {}),
+      ...(msg.mode === "review" ? { disallowedTools: EDIT_TOOLS } : {}),
+      canUseTool: this.canUseTool(conversation, msg.id),
       systemPrompt: { type: "preset", preset: "claude_code", append: SYSTEM_APPEND },
       ...(msg.model ? { model: msg.model } : {}),
-      ...(this.sessionId ? { resume: this.sessionId } : {}),
+      ...(conv.sessionId ? { resume: conv.sessionId } : {}),
     };
 
     let done = false;
     try {
       const q = this.queryFn({ prompt: msg.text, options });
-      this.running.interrupt = () => q.interrupt();
+      running.interrupt = () => q.interrupt();
       for await (const message of q) {
         if ("session_id" in message && typeof message.session_id === "string") {
-          this.sessionId = message.session_id;
+          conv.sessionId = message.session_id;
         }
         for (const event of toEvents(message)) {
-          this.send({ type: "event", promptId: msg.id, event });
+          this.send({ type: "event", conversation, promptId: msg.id, event });
         }
         if (message.type === "result") {
           done = true;
           this.send({
             type: "done",
+            conversation,
             promptId: msg.id,
-            sessionId: this.sessionId,
+            sessionId: conv.sessionId,
             isError: message.is_error,
             costUsd: message.total_cost_usd,
             durationMs: message.duration_ms,
@@ -120,15 +169,21 @@ export class AgentServer {
         }
       }
     } catch (err) {
-      this.send({ type: "error", promptId: msg.id, message: err instanceof Error ? err.message : String(err) });
+      this.send({
+        type: "error",
+        conversation,
+        promptId: msg.id,
+        message: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       this.denyPending(msg.id, "execução encerrada");
-      this.running = null;
+      conv.running = null;
       if (!done) {
         this.send({
           type: "done",
+          conversation,
           promptId: msg.id,
-          sessionId: this.sessionId,
+          sessionId: conv.sessionId,
           isError: true,
           costUsd: null,
           durationMs: null,
@@ -138,13 +193,13 @@ export class AgentServer {
     }
   }
 
-  private canUseTool(promptId: string): CanUseTool {
+  private canUseTool(conversation: string, promptId: string): CanUseTool {
     return (toolName, input, { signal }) =>
       new Promise<PermissionResult>((resolve) => {
         const id = `perm-${++this.nextPermissionId}`;
-        this.pending.set(id, { promptId, resolve });
+        this.pending.set(id, { conversation, promptId, resolve });
         signal.addEventListener("abort", () => this.resolvePermission(id, false, "cancelado"), { once: true });
-        this.send({ type: "permission_request", id, promptId, toolName, input });
+        this.send({ type: "permission_request", conversation, id, promptId, toolName, input });
       });
   }
 
@@ -152,9 +207,7 @@ export class AgentServer {
     const pending = this.pending.get(id);
     if (!pending) return;
     this.pending.delete(id);
-    pending.resolve(
-      allow ? { behavior: "allow" } : { behavior: "deny", message: message ?? "negado pelo usuário" },
-    );
+    pending.resolve(allow ? { behavior: "allow" } : { behavior: "deny", message: message ?? "negado pelo usuário" });
   }
 
   private denyPending(promptId: string, message: string): void {
@@ -163,13 +216,14 @@ export class AgentServer {
     }
   }
 
-  private async interrupt(): Promise<void> {
-    if (!this.running) return;
-    this.denyPending(this.running.promptId, "interrompido");
-    if (this.running.interrupt) {
-      await this.running.interrupt().catch(() => this.running?.abort.abort());
+  private async interrupt(conversation: string): Promise<void> {
+    const running = this.conversations.get(conversation)?.running;
+    if (!running) return;
+    this.denyPending(running.promptId, "interrompido");
+    if (running.interrupt) {
+      await running.interrupt().catch(() => running.abort.abort());
     } else {
-      this.running.abort.abort();
+      running.abort.abort();
     }
   }
 }

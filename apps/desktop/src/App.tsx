@@ -68,7 +68,12 @@ export default function App() {
               <div class="content">
                 {/* O chat fica montado para não perder o scroll ao trocar de aba. */}
                 <div class="pane" hidden={tab() !== "agent"}>
-                  <AgentPanel cwd={p().root} />
+                  <AgentPanel
+                    conversation="main"
+                    cwd={p().root}
+                    modes={["assisted", "autonomous", "plan"]}
+                    empty="Converse com o agente sobre este projeto. Para trabalho longo sem aprovações, use a aba Tarefas."
+                  />
                 </div>
                 <Show when={tab() === "diff"}>
                   <DiffPanel root={p().root} path={selected()} version={version()} />

@@ -1,14 +1,30 @@
 // Protocolo JSON lines entre o app (Rust) e o sidecar. Uma mensagem por linha.
-// Espelhado em crates/agent e apps/desktop/src/lib/agent.ts.
+// Espelhado em crates/agent e apps/desktop/src/lib/agent.ts — mudou um, mude os três.
 
-/** Nível de autonomia escolhido na UI (ver docs/ROADMAP.md, módulo 6). */
-export type AutonomyMode = "plan" | "assisted" | "autonomous";
+/**
+ * Nível de autonomia escolhido na UI (ver docs/ROADMAP.md, módulo 6).
+ * `full` e `review` dispensam aprovação e só são aceitos pelo app dentro de um
+ * worktree de tarefa. `review` roda comandos (testes) mas não tem ferramentas de edição.
+ */
+export type AutonomyMode = "plan" | "assisted" | "autonomous" | "full" | "review";
 
+/**
+ * Cada conversa tem sua própria sessão do SDK e roda em paralelo às outras
+ * (chat principal, uma por tarefa, uma por revisão).
+ */
 export type Inbound =
-  | { type: "prompt"; id: string; text: string; cwd: string; mode: AutonomyMode; model?: string }
+  | {
+      type: "prompt";
+      conversation: string;
+      id: string;
+      text: string;
+      cwd: string;
+      mode: AutonomyMode;
+      model?: string;
+    }
   | { type: "permission_response"; id: string; allow: boolean; message?: string }
-  | { type: "interrupt" }
-  | { type: "reset" };
+  | { type: "interrupt"; conversation: string }
+  | { type: "reset"; conversation: string };
 
 /** Eventos já simplificados para a UI, independentes do formato interno do SDK. */
 export type AgentEvent =
@@ -19,10 +35,18 @@ export type AgentEvent =
 
 export type Outbound =
   | { type: "ready" }
-  | { type: "event"; promptId: string; event: AgentEvent }
-  | { type: "permission_request"; id: string; promptId: string; toolName: string; input: unknown }
+  | { type: "event"; conversation: string; promptId: string; event: AgentEvent }
+  | {
+      type: "permission_request";
+      conversation: string;
+      id: string;
+      promptId: string;
+      toolName: string;
+      input: unknown;
+    }
   | {
       type: "done";
+      conversation: string;
       promptId: string;
       sessionId: string | null;
       isError: boolean;
@@ -30,4 +54,4 @@ export type Outbound =
       durationMs: number | null;
       result: string | null;
     }
-  | { type: "error"; promptId: string | null; message: string };
+  | { type: "error"; conversation: string | null; promptId: string | null; message: string };

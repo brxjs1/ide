@@ -3,51 +3,60 @@ import { For, Match, Show, Switch, createEffect, createSignal } from "solid-js";
 import {
   type AutonomyMode,
   type ChatItem,
-  agent,
+  conversation,
   interrupt,
   resetConversation,
   respondPermission,
   sendPrompt,
 } from "../lib/agent";
 
-const MODES: { value: AutonomyMode; label: string; hint: string }[] = [
-  { value: "plan", label: "Planejar", hint: "Só lê e propõe um plano; não altera nada." },
-  { value: "assisted", label: "Assistido", hint: "Lê sozinho; pede aprovação para editar e executar." },
-  { value: "autonomous", label: "Autônomo", hint: "Edita sozinho; ainda pede aprovação para comandos." },
-];
+export const MODE_INFO: Record<AutonomyMode, { label: string; hint: string }> = {
+  plan: { label: "Planejar", hint: "Só lê e propõe um plano; não altera nada." },
+  assisted: { label: "Assistido", hint: "Lê sozinho; pede aprovação para editar e executar." },
+  autonomous: { label: "Autônomo", hint: "Edita sozinho; ainda pede aprovação para comandos." },
+  full: { label: "Total", hint: "Sem aprovações. Só dentro do worktree desta tarefa." },
+  review: { label: "Revisão", hint: "Roda testes sem aprovação, mas não pode editar arquivos." },
+};
 
-export default function AgentPanel(props: { cwd: string }) {
+export default function AgentPanel(props: {
+  conversation: string;
+  cwd: string;
+  modes: AutonomyMode[];
+  initialMode?: AutonomyMode;
+  empty?: string;
+}) {
   const [text, setText] = createSignal("");
-  const [mode, setMode] = createSignal<AutonomyMode>("assisted");
+  const [mode, setMode] = createSignal<AutonomyMode>(props.initialMode ?? props.modes[0]!);
+  const conv = () => conversation(props.conversation);
+  const running = () => conv().running !== null;
   let list!: HTMLDivElement;
 
   createEffect(() => {
-    agent.items.length;
+    conv().items.length;
     queueMicrotask(() => list.scrollTo({ top: list.scrollHeight }));
   });
 
   const submit = () => {
     const prompt = text().trim();
-    if (!prompt || agent.running) return;
+    if (!prompt || running()) return;
     setText("");
-    void sendPrompt(prompt, props.cwd, mode());
+    void sendPrompt(props.conversation, prompt, props.cwd, mode());
   };
 
   return (
     <div class="agent">
       <div class="chat" ref={list}>
         <Show
-          when={agent.items.length}
+          when={conv().items.length}
           fallback={
             <div class="empty muted">
-              <p>Converse com o agente sobre este projeto.</p>
-              <p class="small">Ex.: “analise o projeto e diga o que melhorar”, “revise antes de eu commitar”.</p>
+              <p>{props.empty ?? "Converse com o agente sobre este projeto."}</p>
             </div>
           }
         >
-          <For each={agent.items}>{(item) => <Item item={item} />}</For>
+          <For each={conv().items}>{(item) => <Item item={item} />}</For>
         </Show>
-        <Show when={agent.running}>
+        <Show when={running()}>
           <p class="muted small working">trabalhando…</p>
         </Show>
       </div>
@@ -62,7 +71,7 @@ export default function AgentPanel(props: { cwd: string }) {
         <textarea
           value={text()}
           placeholder="Peça algo ao agente — Enter envia, Shift+Enter quebra linha"
-          rows={3}
+          rows={2}
           onInput={(e) => setText(e.currentTarget.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -74,24 +83,29 @@ export default function AgentPanel(props: { cwd: string }) {
         <div class="composer-bar">
           <select
             value={mode()}
+            disabled={props.modes.length < 2}
             onChange={(e) => setMode(e.currentTarget.value as AutonomyMode)}
-            title={MODES.find((m) => m.value === mode())?.hint}
           >
-            <For each={MODES}>{(m) => <option value={m.value}>{m.label}</option>}</For>
+            <For each={props.modes}>{(m) => <option value={m}>{MODE_INFO[m].label}</option>}</For>
           </select>
-          <span class="muted small grow">{MODES.find((m) => m.value === mode())?.hint}</span>
-          <button type="button" class="ghost" disabled={!!agent.running} onClick={() => void resetConversation()}>
+          <span class="muted small grow">{MODE_INFO[mode()].hint}</span>
+          <button
+            type="button"
+            class="ghost"
+            disabled={running()}
+            onClick={() => void resetConversation(props.conversation)}
+          >
             Nova conversa
           </button>
           <Show
-            when={agent.running}
+            when={running()}
             fallback={
               <button type="submit" class="primary" disabled={!text().trim()}>
                 Enviar
               </button>
             }
           >
-            <button type="button" onClick={() => void interrupt()}>
+            <button type="button" onClick={() => void interrupt(props.conversation)}>
               Interromper
             </button>
           </Show>

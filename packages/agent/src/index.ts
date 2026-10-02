@@ -17,11 +17,11 @@ lines.on("line", (line) => {
   try {
     msg = JSON.parse(line) as Inbound;
   } catch {
-    send({ type: "error", promptId: null, message: `linha inválida: ${line.slice(0, 200)}` });
+    send({ type: "error", conversation: null, promptId: null, message: `linha inválida: ${line.slice(0, 200)}` });
     return;
   }
   server.handle(msg).catch((err: unknown) => {
-    send({ type: "error", promptId: null, message: err instanceof Error ? err.message : String(err) });
+    send({ type: "error", conversation: null, promptId: null, message: err instanceof Error ? err.message : String(err) });
   });
 });
 lines.on("close", () => process.exit(0));
