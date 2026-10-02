@@ -53,14 +53,30 @@ Tarefa (lib/tasks.ts)
   → Integrar: task_merge (merge --no-ff) + task_discard
 ```
 
+## UI (apps/desktop/src)
+
+```text
+App.tsx            Workspace: grid sidebar | main (topbar, avisos, thread, terminal) | painel
+lib/agent.ts       store das conversas + sessão do SDK; `revision` reativa para persistir
+lib/threads.ts     threads por projeto no localStorage (sem apagar as de outros projetos)
+lib/tasks.ts       thread em worktree, revisão de tarefa e do working tree
+lib/sentinel.ts    agente em background (ociosidade → revisão leve; respeita orçamento)
+lib/banners.ts     avisos no topo
+components/        Sidebar, TopBar, ThreadView (+ SentinelView), Composer, ChatItem,
+                   RightPanel (DiffPanel, TimelinePanel, TodayPanel), Banners, Terminal
+```
+
 ## Protocolo do agente
 
 Definido em `packages/agent/src/protocol.ts` e espelhado em `crates/agent/src/lib.rs`
 (enums serde) e `apps/desktop/src/lib/agent.ts`. **Mudou um, mude os três** — os testes
 de serialização em `crates/agent` pegam divergências de formato.
 
-Cada mensagem carrega uma `conversation`. Cada conversa tem sua sessão do SDK e roda em
-paralelo às outras: `main` (chat), `task:<slug>` e `review:<slug>`.
+Cada mensagem carrega uma `conversation`. O `prompt` aceita `model`, `effort` e `resume`
+(sessão + custo acumulado, para continuar após reiniciar); o `done` traz `costUsd` (só deste
+pedido) e `costTotal` (acumulado da sessão). Cada conversa tem sua sessão do SDK e roda em
+paralelo às outras: `t:<id>` (thread local), `task:<slug>`, `review:<slug>` e `watch:main`
+(Sentinela, sujeita ao orçamento diário — ver ADR 0003).
 
 | Autonomia | `permissionMode` do SDK | Aprovação na UI | Restrição |
 |---|---|---|---|

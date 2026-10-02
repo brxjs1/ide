@@ -105,6 +105,6 @@ SolidJS UI: chat · diff · terminal · timeline · (Monaco, fase 3)
 | 1 | Shell Tauri: chat (sidecar SDK), diff, terminal PTY, timeline SQLite | ✅ (empacotar o sidecar no instalador fica para a 2) |
 | 2 | Worktree por tarefa na UI, autonomia total em worktree, pipeline de revisão, sidecar no instalador | ✅ (Node embutido e sandbox de SO ficam para depois) |
 | 3 | Monaco, LSP, tree-sitter como tools MCP | — |
-| 4 | Background agent, daily brief, debugger, embeddings | — |
+| 4 | Background agent, daily brief, debugger, embeddings | ✅ Sentinela, resumo do dia e orçamento; debugger e embeddings adiados (ADR 0003) |
 
 A Fase 0 existe para descobrir, usando no dia a dia, o que a Fase 1 realmente precisa ter.

@@ -5,39 +5,36 @@ Visão completa e fases em [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## App desktop (Tauri 2 + SolidJS)
 
-![Tarefa autônoma em worktree](docs/images/tarefa.png)
+![Tela inicial](docs/images/inicio.png)
 
 | | |
 |---|---|
-| ![Revisão automática da tarefa](docs/images/revisao.png) | ![Timeline](docs/images/timeline.png) |
-| ![Agente com aprovação de comando](docs/images/agente.png) | ![Diff e terminal](docs/images/diff-terminal.png) |
+| ![Thread em worktree com revisão automática](docs/images/thread-worktree.png) | ![Sentinela e resumo do dia](docs/images/sentinela-hoje.png) |
 
-O que já funciona:
+Interface centrada em **threads** (estilo T3 Code, tema escuro):
 
-- **Tarefas autônomas** (Fase 2): descreva objetivo e critérios; o app cria um worktree
-  `task/<slug>`, o agente trabalha nele **sem pedir aprovação** e faz commits, e uma
-  **revisão automática** (contexto limpo, roda os testes, não pode editar) dá o veredito.
-  Você vê o diff contra a base e escolhe **Integrar** (merge commit; o worktree é
-  removido) ou **Descartar**. Várias tarefas rodam em paralelo.
-- **Agente** (Claude Agent SDK num sidecar Node): chat com streaming de texto e
-  ferramentas, sessões independentes por conversa, interromper e níveis de autonomia:
+- **Uma lista de threads** para tudo: conversas no checkout atual e tarefas autônomas em
+  worktree, com busca, idade, selos (trabalhando, aguarda você, veredito da revisão) e
+  seção de concluídas. Threads ficam salvas e continuam depois de reiniciar o app.
+- **Composer** com modelo (Opus 5.5, Sonnet 5.5, Haiku 4.5, Fable 5.1), esforço de
+  raciocínio e nível de acesso; embaixo, **Checkout atual** ou **Novo worktree**.
+  Escolher worktree cria `task/<slug>`, o agente trabalha sem pedir aprovação e uma
+  **revisão automática** (contexto limpo, roda testes, não edita) aparece na thread.
+  A barra superior oferece **Revisar · Integrar · Descartar**.
+- **Sentinela** (Fase 4): agente em background que, quando você fica ocioso, revisa as
+  alterações não commitadas procurando só bloqueantes. Opt-in, esforço baixo, avisa no topo.
+- **Hoje** (Fase 4): gasto do dia com **orçamento diário** (corta a Sentinela), atividade,
+  tarefas abertas e commits de hoje — calculado localmente, sem chamar o modelo.
+- **Painel lateral** com Alterações (diff), Timeline e Hoje; **terminal** recolhível que
+  mantém o shell vivo; avisos no topo para erros, integrações e achados da Sentinela.
 
-  | Modo | Leitura | Edição | Comandos | Onde |
+  | Acesso | Leitura | Edição | Comandos | Onde |
   |---|---|---|---|---|
   | Planejar | automática | bloqueada | bloqueados | qualquer lugar |
   | Assistido | automática | pede aprovação | pede aprovação | qualquer lugar |
   | Autônomo | automática | automática | pede aprovação | qualquer lugar |
-  | Total | automática | automática | automáticos | só worktree de tarefa |
+  | Acesso total | automática | automática | automáticos | só worktree de tarefa |
   | Revisão | automática | bloqueada | automáticos | só worktree de tarefa |
-
-- **Revisar antes do commit**: na aba Diff, "Revisar com o agente" manda o diff do
-  branch atual para uma revisão no formato de `.project/conventions/code-review.md`.
-
-- **Terminal** real (PTY) com o seu shell, cores e redimensionamento.
-- **Diff** do working tree contra o HEAD, inclusive arquivos novos.
-- **Timeline** em SQLite: prompts, ferramentas usadas, custo e terminais, por projeto.
-- Barra lateral com branch, alterações e worktrees, atualizada ao fim de cada execução
-  do agente e quando a saída do terminal assenta (depois de um `git commit`, por exemplo).
 
 Monorepo com pnpm workspaces + Cargo workspace. Estrutura e regras em
 [`.project/architecture/monorepo.md`](.project/architecture/monorepo.md).
