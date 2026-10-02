@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Valida a mensagem de commit contra .project/conventions/commits.md
+set -euo pipefail
+
+msg_file="$1"
+subject="$(grep -v '^#' "$msg_file" | head -n 1)"
+
+# Commits gerados pelo git ou marcados para squash passam direto.
+case "$subject" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *|amend!\ *) exit 0 ;;
+esac
+
+types='feat|fix|refactor|perf|test|docs|build|ci|chore|style|revert'
+pattern="^($types)(\([a-z0-9-]+\))?!?: [^ ](.*[^.])?$"
+
+fail() {
+  echo "commit-msg: $1" >&2
+  echo "  recebido: $subject" >&2
+  echo "  formato:  <tipo>(<escopo>): <resumo no imperativo, sem ponto final>" >&2
+  echo "  tipos:    ${types//|/, }" >&2
+  echo "  ver .project/conventions/commits.md" >&2
+  exit 1
+}
+
+[[ "$subject" =~ $pattern ]] || fail "resumo fora do padrão Conventional Commits"
+(( ${#subject} <= 72 )) || fail "resumo com ${#subject} caracteres (máx. 72)"
+
+second_line="$(grep -v '^#' "$msg_file" | sed -n '2p')"
+[[ -z "$second_line" ]] || fail "deixe uma linha em branco entre o resumo e o corpo"
