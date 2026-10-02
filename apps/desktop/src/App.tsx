@@ -4,11 +4,13 @@ import AgentPanel from "./components/AgentPanel";
 import DiffPanel from "./components/DiffPanel";
 import Sidebar from "./components/Sidebar";
 import Terminal from "./components/Terminal";
+import TasksPanel from "./components/TasksPanel";
 import TimelinePanel from "./components/TimelinePanel";
 import { onAgentDone } from "./lib/agent";
 import { changedFiles, isTauri, projectInfo } from "./lib/ipc";
+import { reviewWorkingTree } from "./lib/tasks";
 
-type Tab = "agent" | "diff" | "timeline";
+type Tab = "agent" | "tasks" | "diff" | "timeline";
 
 export default function App() {
   const [version, setVersion] = createSignal(0);
@@ -21,6 +23,8 @@ export default function App() {
   );
   const [tab, setTab] = createSignal<Tab>("agent");
   const [selected, setSelected] = createSignal<string | null>(null);
+  // Worktrees de tarefa aparecem na lista do projeto; contá-los evita outra chamada.
+  const tasksCount = () => project()?.worktrees.filter((w) => w.branch?.startsWith("task/")).length ?? 0;
 
   // O agente e o terminal mudam arquivos: atualiza git ao fim de cada execução e ao focar a janela.
   onCleanup(onAgentDone(refresh));
@@ -55,6 +59,12 @@ export default function App() {
                 <button classList={{ active: tab() === "agent" }} onClick={() => setTab("agent")}>
                   Agente
                 </button>
+                <button classList={{ active: tab() === "tasks" }} onClick={() => setTab("tasks")}>
+                  Tarefas
+                  <Show when={tasksCount()}>
+                    <span class="count">{tasksCount()}</span>
+                  </Show>
+                </button>
                 <button classList={{ active: tab() === "diff" }} onClick={() => setTab("diff")}>
                   Diff
                   <Show when={files()?.length}>
@@ -75,8 +85,20 @@ export default function App() {
                     empty="Converse com o agente sobre este projeto. Para trabalho longo sem aprovações, use a aba Tarefas."
                   />
                 </div>
+                <Show when={tab() === "tasks"}>
+                  <TasksPanel root={p().root} version={version()} onChange={refresh} />
+                </Show>
                 <Show when={tab() === "diff"}>
-                  <DiffPanel root={p().root} path={selected()} version={version()} />
+                  <DiffPanel
+                    root={p().root}
+                    path={selected()}
+                    version={version()}
+                    changed={files()?.length ?? 0}
+                    onReview={() => {
+                      setTab("agent");
+                      void reviewWorkingTree(p().root);
+                    }}
+                  />
                 </Show>
                 <Show when={tab() === "timeline"}>
                   <TimelinePanel project={p().root} />

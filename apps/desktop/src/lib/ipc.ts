@@ -62,3 +62,20 @@ export async function ptySpawn(cwd: string, rows: number, cols: number, handlers
 export const ptyWrite = (id: number, data: string) => invoke<void>("pty_write", { id, data });
 export const ptyResize = (id: number, rows: number, cols: number) => invoke<void>("pty_resize", { id, rows, cols });
 export const ptyKill = (id: number) => invoke<void>("pty_kill", { id });
+
+export interface Task {
+  slug: string;
+  branch: string;
+  path: string;
+  goal: string | null;
+  base: string | null;
+  ahead: number;
+  dirty: boolean;
+}
+
+export const taskList = (root: string) => invoke<Task[]>("task_list", { root });
+export const taskCreate = (root: string, slug: string, goal: string) =>
+  invoke<Task>("task_create", { root, slug, goal });
+export const taskDiff = (root: string, slug: string) => invoke<string>("task_diff", { root, slug });
+export const taskMerge = (root: string, slug: string) => invoke<string>("task_merge", { root, slug });
+export const taskDiscard = (root: string, slug: string) => invoke<void>("task_discard", { root, slug });

@@ -16,6 +16,9 @@ pub mod kind {
     pub const AGENT_ERROR: &str = "agent.error";
     pub const TERMINAL_START: &str = "terminal.start";
     pub const TERMINAL_EXIT: &str = "terminal.exit";
+    pub const TASK_CREATE: &str = "task.create";
+    pub const TASK_MERGE: &str = "task.merge";
+    pub const TASK_DISCARD: &str = "task.discard";
 }
 
 #[derive(Debug, thiserror::Error)]
