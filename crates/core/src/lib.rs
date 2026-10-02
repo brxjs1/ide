@@ -4,9 +4,11 @@
 pub mod diff;
 pub mod git;
 pub mod project;
+pub mod tasks;
 
 pub use diff::{ChangedFile, FileStatus};
 pub use project::{ProjectInfo, Worktree};
+pub use tasks::Task;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -16,6 +18,22 @@ pub enum Error {
     Git { args: String, stderr: String },
     #[error("arquivo sem alterações no repositório: {0}")]
     NotChanged(String),
+    #[error("nome de tarefa inválido: {0:?} (use a-z, 0-9 e -, até 50 caracteres)")]
+    InvalidSlug(String),
+    #[error("a tarefa {0} já existe")]
+    TaskExists(String),
+    #[error("a tarefa {0} não existe")]
+    TaskNotFound(String),
+    #[error("o repositório não tem commits; crie um antes de abrir tarefas")]
+    NoCommits,
+    #[error("a tarefa {0} tem alterações não commitadas")]
+    TaskDirty(String),
+    #[error("o branch atual tem alterações não commitadas; commite ou guarde antes de integrar")]
+    MainDirty,
+    #[error("a tarefa {0} não tem commits para integrar")]
+    NothingToMerge(String),
+    #[error("conflito ao integrar a tarefa (merge abortado): {0}")]
+    MergeConflict(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
