@@ -4,6 +4,7 @@
 use std::path::Path;
 
 use serde::Serialize;
+pub use tree_sitter;
 use tree_sitter::{Language, Node, Parser, Query, QueryCursor, StreamingIterator};
 
 /// Arquivos maiores que isso são ignorados na busca (geralmente gerados).
@@ -131,16 +132,21 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Árvore sintática de `source` (para quem analisa o código, como o `ide-lint`).
+pub fn parse(source: &str, lang: Lang) -> Result<tree_sitter::Tree> {
+    let mut parser = Parser::new();
+    parser
+        .set_language(&lang.language())
+        .map_err(|e| Error::TreeSitter(e.to_string()))?;
+    parser
+        .parse(source, None)
+        .ok_or_else(|| Error::TreeSitter("parse cancelado".into()))
+}
+
 /// Símbolos definidos em `source`, na ordem em que aparecem.
 pub fn outline(source: &str, lang: Lang) -> Result<Vec<Symbol>> {
     let language = lang.language();
-    let mut parser = Parser::new();
-    parser
-        .set_language(&language)
-        .map_err(|e| Error::TreeSitter(e.to_string()))?;
-    let tree = parser
-        .parse(source, None)
-        .ok_or_else(|| Error::TreeSitter("parse cancelado".into()))?;
+    let tree = parse(source, lang)?;
 
     let query =
         Query::new(&language, &lang.query()).map_err(|e| Error::TreeSitter(e.to_string()))?;
