@@ -10,6 +10,7 @@ license = "MIT"
 [workspace.dependencies]
 ide-agent = { path = "crates/agent" }
 ide-core = { path = "crates/core" }
+ide-lint = { path = "crates/lint" }
 ide-lsp = { path = "crates/lsp" }
 ide-syntax = { path = "crates/syntax" }
 ide-pty = { path = "crates/pty" }

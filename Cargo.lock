@@ -1561,6 +1561,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ide-lint"
+version = "0.1.0"
+dependencies = [
+ "ide-syntax",
+ "ignore",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "ide-lsp"
 version = "0.1.0"
 dependencies = [
