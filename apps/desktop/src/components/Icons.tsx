@@ -57,3 +57,31 @@ export default function Icon(props: { name: IconName; size?: number; class?: str
     </svg>
   );
 }
+
+/** Marca do app (mesmo desenho de src-tauri/icons, simplificado para tamanhos pequenos). */
+export function Logo(props: { size?: number }) {
+  return (
+    <svg class="logo" width={props.size ?? 18} height={props.size ?? 18} viewBox="0 0 1024 1024" aria-hidden="true">
+      <defs>
+        <linearGradient id="logo-spark" x1="0.2" y1="0.1" x2="0.8" y2="0.9">
+          <stop offset="0" stop-color="#60a5fa" />
+          <stop offset="0.55" stop-color="#3b82f6" />
+          <stop offset="1" stop-color="#8b5cf6" />
+        </linearGradient>
+      </defs>
+      <rect x="32" y="32" width="960" height="960" rx="224" fill="#16161c" stroke="#ffffff22" stroke-width="16" />
+      <path
+        d="M332 352 196 512l136 160M692 352l136 160-136 160"
+        fill="none"
+        stroke="#d4d4dc"
+        stroke-width="72"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+      <path
+        d="M512 330c16 116 44 148 160 182-116 34-144 66-160 182-16-116-44-148-160-182 116-34 144-66 160-182Z"
+        fill="url(#logo-spark)"
+      />
+    </svg>
+  );
+}

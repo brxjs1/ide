@@ -6,7 +6,7 @@ import { parseVerdict } from "../lib/prompts";
 import { type SentinelStatus, sentinel } from "../lib/sentinel";
 import { reviewConversation } from "../lib/tasks";
 import { type Thread, age } from "../lib/threads";
-import Icon from "./Icons";
+import Icon, { Logo } from "./Icons";
 
 export type Selection = { kind: "new" } | { kind: "thread"; id: string } | { kind: "sentinel" } | { kind: "editor" };
 
@@ -40,6 +40,7 @@ export default function Sidebar(props: {
         <button class="icon-btn" onClick={() => props.onCollapse()} title="Recolher barra lateral">
           <Icon name="sidebar" />
         </button>
+        <Logo />
         <span>ide</span>
       </div>
 
