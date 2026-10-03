@@ -1,6 +1,7 @@
 import { Match, Show, Switch } from "solid-js";
 
 import { type ChatItem as Item, respondPermission } from "../lib/agent";
+import { openFile, projectPath } from "../lib/editor";
 import Icon from "./Icons";
 
 export default function ChatItem(props: { item: Item }) {
@@ -25,7 +26,23 @@ export default function ChatItem(props: { item: Item }) {
             <summary>
               <Icon name={item().name === "Bash" ? "terminal" : item().name.match(/Write|Edit/) ? "edit" : "tool"} />
               <span class="tool-name">{item().name}</span>
-              <span class="tool-detail ellipsis">{describe(item().input)}</span>
+              <Show
+                when={projectPath(filePath(item().input))}
+                fallback={<span class="tool-detail ellipsis">{describe(item().input)}</span>}
+              >
+                {(rel) => (
+                  <a
+                    class="tool-detail file-link ellipsis"
+                    title="Abrir no editor"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void openFile(rel());
+                    }}
+                  >
+                    {rel()}
+                  </a>
+                )}
+              </Show>
               <Show when={!item().result}>
                 <span class="spinner" />
               </Show>
@@ -75,6 +92,12 @@ export default function ChatItem(props: { item: Item }) {
       </Match>
     </Switch>
   );
+}
+
+function filePath(input: unknown): string | null {
+  if (!input || typeof input !== "object") return null;
+  const value = (input as Record<string, unknown>).file_path;
+  return typeof value === "string" ? value : null;
 }
 
 /** O campo mais descritivo do input de uma ferramenta, como no resumo da timeline. */
