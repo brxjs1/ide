@@ -12,7 +12,8 @@ export type Selection =
   | { kind: "new" }
   | { kind: "thread"; id: string }
   | { kind: "sentinel" }
-  | { kind: "editor" };
+  | { kind: "editor" }
+  | { kind: "board" };
 
 const SETTLED_PAGE = 10;
 
@@ -22,6 +23,8 @@ export default function Sidebar(props: {
   selection: Selection;
   onSelect: (selection: Selection) => void;
   onPanel: (tab: "files" | "diff" | "problems" | "timeline" | "today") => void;
+  /** Tarefas do quadro em progresso e a fazer. */
+  board: { doing: number; todo: number };
   onPalette: () => void;
   onRefresh: () => void;
   onCollapse: () => void;
@@ -101,6 +104,22 @@ export default function Sidebar(props: {
             </span>
             <Show when={editorState.files.some((f) => f.dirty)}>
               <span class="dot unsaved" title="Arquivos com alterações não salvas" />
+            </Show>
+          </Show>
+        </button>
+        <button
+          class="sentinel-row"
+          classList={{ active: props.selection.kind === "board" }}
+          onClick={() => props.onSelect({ kind: "board" })}
+        >
+          <Icon name="board" />
+          <span class="grow">Tarefas</span>
+          <Show
+            when={props.board.doing || props.board.todo}
+            fallback={<span class="card-age">vazio</span>}
+          >
+            <Show when={props.board.doing} fallback={<span class="card-age">{props.board.todo} a fazer</span>}>
+              <span class="pill working">{props.board.doing} em progresso</span>
             </Show>
           </Show>
         </button>

@@ -1,6 +1,7 @@
 import { Match, Show, Switch, createEffect, createResource, createSignal, on, onCleanup, onMount } from "solid-js";
 
 import Banners from "./components/Banners";
+import BoardView from "./components/BoardView";
 import CommandPalette, { type Command, type PaletteMode } from "./components/CommandPalette";
 import EditorView from "./components/EditorView";
 import type { ComposerValue } from "./components/Composer";
@@ -10,11 +11,17 @@ import Terminal from "./components/Terminal";
 import ThreadView, { SentinelView } from "./components/ThreadView";
 import TopBar from "./components/TopBar";
 import { onAgentDone, onAgentError, sendPrompt } from "./lib/agent";
+import { taskBody } from "./lib/board";
 import { dismissTitle, notify } from "./lib/banners";
 import * as editor from "./lib/editor";
 import {
+  type BoardTask,
   type ProjectInfo,
+  boardList,
+  boardSetMeta,
+  boardSetStatus,
   changedFiles,
+  fileRead,
   isTauri,
   projectInfo,
   settingsGet,
@@ -25,7 +32,7 @@ import {
 } from "./lib/ipc";
 import { analyzeProject, lens, onShowProblems, setLens } from "./lib/quality";
 import * as sentinel from "./lib/sentinel";
-import { reviewTask, reviewWorkingTree, setRoot } from "./lib/tasks";
+import { reviewTask, reviewWorkingTree, setRoot, startWorktreeThread } from "./lib/tasks";
 import { adoptTasks, age, createThread, load, threadById, threads, updateThread } from "./lib/threads";
 
 const DEFAULT_DRAFT: ComposerValue = { model: "claude-opus-5-5", effort: "high", mode: "assisted", where: "local" };
@@ -54,6 +61,9 @@ function Workspace(props: { initial: ProjectInfo }) {
 
   const [project] = createResource(version, () => projectInfo(root), { initialValue: props.initial });
   const [files] = createResource(version, () => changedFiles(root), { initialValue: [] });
+  const [board, { refetch: refetchBoard }] = createResource(version, () => boardList(root).catch(() => []), {
+    initialValue: [],
+  });
 
   const [selection, setSelection] = createSignal<Selection>({ kind: "new" });
   const [draft, setDraft] = createSignal<ComposerValue>(DEFAULT_DRAFT);
@@ -164,6 +174,9 @@ function Workspace(props: { initial: ProjectInfo }) {
     await reviewWorkingTree(root, target);
   };
 
+  /** Tarefa do quadro ligada a um worktree (`- Worktree: task/<slug>`). */
+  const boardTaskOf = (slug: string) => board().find((b) => b.worktree === `task/${slug}`);
+
   const merge = async () => {
     const t = thread();
     if (t?.location.kind !== "worktree") return;
@@ -171,6 +184,12 @@ function Workspace(props: { initial: ProjectInfo }) {
       const commit = await taskMerge(root, t.location.slug);
       await taskDiscard(root, t.location.slug);
       updateThread(t.id, { settled: true });
+      // Integrou: a tarefa do quadro, se houver, está concluída.
+      const linked = boardTaskOf(t.location.slug);
+      if (linked) {
+        await boardSetMeta(root, linked.slug, "Worktree", null).catch(() => {});
+        await boardSetStatus(root, linked.slug, "done").catch(() => {});
+      }
       dismissTitle("Não foi possível integrar");
       notify({ tone: "ok", title: `Tarefa integrada em ${commit}`, text: "O worktree foi removido." }, 8000);
       refresh();
@@ -185,6 +204,12 @@ function Workspace(props: { initial: ProjectInfo }) {
     try {
       await taskDiscard(root, t.location.slug);
       updateThread(t.id, { settled: true });
+      // Descartou: a tarefa volta para "a fazer", sem worktree.
+      const linked = boardTaskOf(t.location.slug);
+      if (linked) {
+        await boardSetMeta(root, linked.slug, "Worktree", null).catch(() => {});
+        await boardSetStatus(root, linked.slug, "todo").catch(() => {});
+      }
       notify({ tone: "info", title: "Tarefa descartada", text: `task/${t.location.slug} foi removido.` }, 6000);
       refresh();
     } catch (e) {
@@ -198,6 +223,7 @@ function Workspace(props: { initial: ProjectInfo }) {
       { id: "files", group: "Ações", label: "Abrir arquivo…", icon: "file", keys: ["Ctrl", "P"], run: () => queueMicrotask(() => setPalette("files")) },
       { id: "editor", group: "Ações", label: "Ir para o editor", icon: "code", run: () => setSelection({ kind: "editor" }) },
       { id: "sentinel", group: "Ações", label: "Ir para a Sentinela", icon: "eye", run: () => setSelection({ kind: "sentinel" }) },
+      { id: "board", group: "Ações", label: "Ir para o quadro de tarefas", icon: "board", run: () => setSelection({ kind: "board" }) },
       { id: "p-problems", group: "Ações", label: "Painel: Problemas de código", icon: "bug", run: () => togglePanel("problems") },
       {
         id: "analyze",
@@ -249,6 +275,28 @@ function Workspace(props: { initial: ProjectInfo }) {
     ];
   };
 
+  /** Entrega uma tarefa do quadro ao agente, num worktree próprio. */
+  const runBoardTask = async (task: BoardTask) => {
+    try {
+      // O arquivo da tarefa costuma não estar commitado, então não existe no worktree
+      // (que nasce do HEAD): o objetivo e os critérios vão no próprio pedido.
+      const body = taskBody(await fileRead(root, task.path));
+      const prompt =
+        `${task.title}\n\nImplemente a tarefa abaixo (do quadro, ${task.path}). ` +
+        "Siga as convenções do projeto e escreva testes. Não edite o arquivo da tarefa: o quadro é atualizado pelo app." +
+        (body ? `\n\n${body}` : "");
+      const created = await startWorktreeThread(root, prompt, draft());
+      if (created.location.kind === "worktree") {
+        await boardSetMeta(root, task.slug, "Worktree", `task/${created.location.slug}`);
+      }
+      await boardSetStatus(root, task.slug, "doing");
+      void refetchBoard();
+      setSelection({ kind: "thread", id: created.id });
+    } catch (e) {
+      notify({ tone: "error", title: "Não foi possível entregar a tarefa ao agente", text: String(e) });
+    }
+  };
+
   /** "Pedir ao agente" a partir de um problema: thread nova no checkout, com aprovação. */
   const askAgent = (prompt: string, threadTitle: string) => {
     const created = createThread({
@@ -266,6 +314,7 @@ function Workspace(props: { initial: ProjectInfo }) {
   const title = () => {
     const s = selection();
     if (s.kind === "sentinel") return "Sentinela";
+    if (s.kind === "board") return "Tarefas";
     if (s.kind === "editor") return editor.editorState.active ?? "Editor";
     return thread()?.title ?? "Nova thread";
   };
@@ -279,6 +328,10 @@ function Workspace(props: { initial: ProjectInfo }) {
           selection={selection()}
           onSelect={setSelection}
           onPanel={togglePanel}
+          board={{
+            doing: board().filter((b) => b.status === "doing").length,
+            todo: board().filter((b) => b.status === "todo").length,
+          }}
           onPalette={() => setPalette("all")}
           onRefresh={refresh}
           onCollapse={() => setSidebarHidden(true)}
@@ -313,7 +366,10 @@ function Workspace(props: { initial: ProjectInfo }) {
             <Match when={selection().kind === "sentinel"}>
               <SentinelView />
             </Match>
-            <Match when={selection().kind !== "editor"}>
+            <Match when={selection().kind === "board"}>
+              <BoardView root={root} version={version()} onRun={runBoardTask} onChange={() => void refetchBoard()} />
+            </Match>
+            <Match when={selection().kind === "new" || selection().kind === "thread"}>
               <ThreadView
                 project={project()}
                 thread={thread()}

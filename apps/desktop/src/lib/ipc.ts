@@ -231,3 +231,33 @@ export const lintSource = (root: string, path: string, text: string) =>
   invoke<CodeIssue[]>("lint_source", { root, path, text });
 export const lintProject = (root: string) => invoke<ProjectReport>("lint_project", { root });
 export const lintRules = () => invoke<LintRule[]>("lint_rules");
+
+// Quadro de tarefas (crates/core::board) — espelha ide_core::board::BoardTask.
+export type TaskStatus = "todo" | "doing" | "done";
+
+export interface BoardTask {
+  slug: string;
+  title: string;
+  status: TaskStatus;
+  priority: string | null;
+  worktree: string | null;
+  checklistDone: number;
+  checklistTotal: number;
+  summary: string;
+  path: string;
+  updated: number;
+}
+
+export const boardList = (root: string) => invoke<BoardTask[]>("board_list", { root });
+export const boardCreate = (
+  root: string,
+  title: string,
+  status: TaskStatus,
+  priority: string | null,
+  description: string | null,
+) => invoke<BoardTask>("board_create", { root, title, status, priority, description });
+export const boardSetStatus = (root: string, slug: string, status: TaskStatus) =>
+  invoke<BoardTask>("board_set_status", { root, slug, status });
+export const boardSetMeta = (root: string, slug: string, key: "Prioridade" | "Worktree", value: string | null) =>
+  invoke<BoardTask>("board_set_meta", { root, slug, key, value });
+export const boardDelete = (root: string, slug: string) => invoke<void>("board_delete", { root, slug });
