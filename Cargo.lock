@@ -1570,6 +1570,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ide-mcp"
+version = "0.1.0"
+dependencies = [
+ "ide-core",
+ "ide-lsp",
+ "ide-syntax",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "ide-pty"
 version = "0.1.0"
 dependencies = [
