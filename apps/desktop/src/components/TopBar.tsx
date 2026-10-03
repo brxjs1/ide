@@ -34,7 +34,13 @@ export default function TopBar(props: {
   return (
     <header class="topbar">
       <Show when={props.sidebarHidden}>
-        <button class="icon-btn" onClick={() => props.onShowSidebar()} title="Mostrar barra lateral">
+        <button
+          class="icon-btn"
+          onClick={() => props.onShowSidebar()}
+          aria-label="Mostrar barra lateral"
+          data-tip="Mostrar barra lateral (Ctrl+B)"
+          data-tip-align="start"
+        >
           <Icon name="sidebar" />
         </button>
       </Show>
@@ -47,8 +53,9 @@ export default function TopBar(props: {
       <span class="grow" />
 
       <Show when={props.editor && editorState.files.find((f) => f.path === editorState.active)?.dirty}>
-        <button class="btn primary" onClick={() => void save()} title="Salvar (Ctrl+S)">
-          Salvar
+        <button class="btn primary" onClick={() => void save()}>
+          <Icon name="check" size={14} /> Salvar
+          <span class="btn-kbd">Ctrl S</span>
         </button>
       </Show>
 
@@ -56,24 +63,27 @@ export default function TopBar(props: {
         when={!props.editor && worktree()}
         fallback={
           <Show when={!props.editor && props.changed > 0}>
-            <button class="btn ghost-border" onClick={() => props.onReviewLocal()} title="Revisão antes do commit">
+            <button class="btn" onClick={() => props.onReviewLocal()} data-tip="Revisão antes do commit">
               <Icon name="review" size={14} /> <span class="btn-label">Revisar</span>
               <span class="btn-count">{props.changed}</span>
             </button>
           </Show>
         }
       >
-        <button class="btn ghost-border" disabled={busy()} onClick={() => props.onReviewTask()} title="Revisar a tarefa">
+        {/* Grupo segmentado: as três ações da tarefa ficam juntas. */}
+        <div class="btn-group" role="group" aria-label="Ações da tarefa">
+        <button class="btn" disabled={busy()} onClick={() => props.onReviewTask()} data-tip="Revisar a tarefa">
           <Icon name="review" size={14} /> <span class="btn-label">Revisar</span>
         </button>
-        <button class="btn ghost-border" disabled={busy()} onClick={() => props.onMerge()} title="Merge no branch atual">
+        <button class="btn" disabled={busy()} onClick={() => props.onMerge()} data-tip="Merge no branch atual">
           <Icon name="merge" size={14} /> <span class="btn-label">Integrar</span>
         </button>
         <button
-          class="btn ghost-border"
+          class="btn danger-soft"
           classList={{ danger: confirm() }}
           disabled={busy()}
-          title="Descartar o worktree"
+          data-tip={confirm() ? "Clique de novo para apagar o worktree" : "Descartar o worktree"}
+          data-tip-align="end"
           onClick={() => {
             if (!confirm()) {
               setConfirm(true);
@@ -89,6 +99,7 @@ export default function TopBar(props: {
             {confirm() ? "Confirmar descarte" : "Descartar"}
           </span>
         </button>
+        </div>
       </Show>
 
       <span class="topbar-sep" />
@@ -96,7 +107,8 @@ export default function TopBar(props: {
         class="icon-btn"
         classList={{ active: props.terminalOpen }}
         onClick={() => props.onTerminal()}
-        title="Terminal"
+        aria-label="Terminal"
+        data-tip="Terminal (Ctrl+J)"
       >
         <Icon name="terminal" />
       </button>
@@ -104,7 +116,9 @@ export default function TopBar(props: {
         class="icon-btn"
         classList={{ active: props.panelOpen }}
         onClick={() => props.onPanel()}
-        title="Painel lateral"
+        aria-label="Painel lateral"
+        data-tip="Painel lateral"
+        data-tip-align="end"
       >
         <Icon name="panel" />
       </button>

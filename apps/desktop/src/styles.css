@@ -207,31 +207,62 @@ h3 {
   color: var(--fg);
 }
 
-/* Botão "outline" do T3: borda branca 8%, fundo quase invisível e um brilho de 1px no topo. */
+/*
+ * Botões: superfície com gradiente sutil (mais claro em cima), borda branca 8%, brilho
+ * interno de 1px e anel de foco. Ao pressionar, afunda meio pixel.
+ */
 .btn {
+  position: relative;
   display: inline-flex;
   gap: 6px;
   align-items: center;
+  justify-content: center;
   height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
+  padding: 0 11px;
+  border: 1px solid rgb(255 255 255 / 9%);
   border-radius: var(--control-radius);
-  background: rgb(255 255 255 / 2.5%);
-  box-shadow: inset 0 1px rgb(255 255 255 / 6%);
+  background: linear-gradient(to bottom, rgb(255 255 255 / 5%), rgb(255 255 255 / 2%));
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 6%),
+    0 1px 2px rgb(0 0 0 / 35%);
   color: var(--fg-soft);
   font-size: 13px;
   font-weight: 500;
+  letter-spacing: -0.005em;
   white-space: nowrap;
   transition:
     background 0.15s,
     border-color 0.15s,
-    color 0.15s;
+    color 0.15s,
+    box-shadow 0.15s,
+    transform 0.1s;
+}
+
+.btn > .icon {
+  color: var(--muted);
+  transition: color 0.15s;
 }
 
 .btn:hover:not(:disabled) {
-  border-color: var(--border-strong);
-  background: rgb(255 255 255 / 5%);
+  border-color: rgb(255 255 255 / 16%);
+  background: linear-gradient(to bottom, rgb(255 255 255 / 8%), rgb(255 255 255 / 4%));
   color: var(--fg);
+}
+
+.btn:hover:not(:disabled) > .icon {
+  color: var(--fg);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.985);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 40%);
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px var(--bg),
+    0 0 0 3px rgb(52 107 241 / 55%);
 }
 
 .btn.ghost-border {
@@ -240,31 +271,204 @@ h3 {
 }
 
 .btn.primary {
-  border-color: transparent;
-  background: var(--accent);
+  border-color: rgb(255 255 255 / 12%);
+  background: linear-gradient(to bottom, #4a7cf5, #2f63e6);
   box-shadow:
-    inset 0 1px rgb(255 255 255 / 16%),
-    0 1px 2px rgb(52 107 241 / 24%);
-  color: var(--accent-fg);
+    inset 0 1px rgb(255 255 255 / 22%),
+    0 1px 2px rgb(0 0 0 / 40%),
+    0 4px 14px -6px rgb(52 107 241 / 60%);
+  color: #fff;
+}
+
+.btn.primary > .icon {
+  color: rgb(255 255 255 / 85%);
 }
 
 .btn.primary:hover:not(:disabled) {
-  border-color: transparent;
-  background: var(--accent-hover);
-  color: var(--accent-fg);
+  border-color: rgb(255 255 255 / 18%);
+  background: linear-gradient(to bottom, #5a88f7, #3a6ef0);
+  color: #fff;
 }
 
-.btn.danger {
-  border-color: transparent;
-  background: #dc2626;
-  box-shadow: inset 0 1px rgb(255 255 255 / 14%);
+.btn.primary:hover:not(:disabled) > .icon {
+  color: #fff;
+}
+
+/* Perigo suave: vermelho só no texto até a confirmação. */
+.btn.danger-soft {
+  color: #fca5a5;
+}
+
+.btn.danger-soft > .icon {
+  color: #f87171;
+}
+
+.btn.danger-soft:hover:not(:disabled) {
+  border-color: rgb(239 68 68 / 35%);
+  background: rgb(239 68 68 / 10%);
+  color: #fecaca;
+}
+
+.btn.danger,
+.btn.danger-soft.danger {
+  border-color: rgb(255 255 255 / 12%);
+  background: linear-gradient(to bottom, #ef4444, #d92d2d);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 20%),
+    0 4px 14px -6px rgb(239 68 68 / 60%);
+  color: #fff;
+}
+
+.btn.danger > .icon,
+.btn.danger-soft.danger > .icon {
   color: #fff;
 }
 
 .btn.danger:hover:not(:disabled) {
-  border-color: transparent;
-  background: #ef4444;
+  background: linear-gradient(to bottom, #f05252, #e03535);
   color: #fff;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  box-shadow: none;
+}
+
+/* Atalho dentro do botão: "Salvar  Ctrl S". */
+.btn-kbd {
+  margin-left: 2px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 22%);
+  color: rgb(255 255 255 / 70%);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* Grupo segmentado: botões colados, separados por uma linha. */
+.btn-group {
+  display: inline-flex;
+  border-radius: var(--control-radius);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 35%);
+}
+
+.btn-group > .btn {
+  border-radius: 0;
+  box-shadow: inset 0 1px rgb(255 255 255 / 6%);
+}
+
+.btn-group > .btn + .btn {
+  margin-left: -1px;
+}
+
+.btn-group > .btn:first-child {
+  border-radius: var(--control-radius) 0 0 var(--control-radius);
+}
+
+.btn-group > .btn:last-child {
+  border-radius: 0 var(--control-radius) var(--control-radius) 0;
+}
+
+.btn-group > .btn:hover:not(:disabled),
+.btn-group > .btn:focus-visible {
+  z-index: 1;
+}
+
+/* Tooltips próprias (data-tip): vidro escuro, aparecem com um pequeno atraso. A caixa só
+   existe durante o hover/foco: invisível mas presente, ela aumentaria a área rolável de
+   colunas com overflow (quadro, listas) e cortaria a dica visível. */
+[data-tip] {
+  position: relative;
+}
+
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 50%;
+  z-index: 60;
+  padding: 4px 8px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 6px;
+  background: rgb(22 22 24 / 96%);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 5%),
+    0 8px 24px -8px rgb(0 0 0 / 80%);
+  color: var(--fg-soft);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.3;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: tip-in 0.12s ease-out 0.45s both;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    translate: 0 -3px;
+    scale: 0.97;
+  }
+}
+
+[data-tip-pos="top"]:hover::after,
+[data-tip-pos="top"]:focus-visible::after {
+  top: auto;
+  bottom: calc(100% + 7px);
+}
+
+[data-tip-align="start"]:hover::after,
+[data-tip-align="start"]:focus-visible::after {
+  left: 0;
+  transform: none;
+}
+
+[data-tip-align="end"]:hover::after,
+[data-tip-align="end"]:focus-visible::after {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+
+/* Durante o clique a dica some (não cobre o que vem depois). */
+[data-tip]:active::after {
+  display: none;
+}
+
+.icon-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(52 107 241 / 55%);
+}
+
+.icon-btn:disabled {
+  opacity: 0.35;
+}
+
+.icon-btn:disabled:hover {
+  background: transparent;
+  color: color-mix(in srgb, var(--muted) 75%, transparent);
+}
+
+.icon-btn.accent {
+  color: var(--accent-text);
+}
+
+.icon-btn.accent:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: #a5c0ff;
+}
+
+.icon-btn.danger {
+  background: rgb(239 68 68 / 16%);
+  color: #fca5a5;
+}
+
+.icon-btn.spinning .icon {
+  animation: spin 0.9s linear infinite;
 }
 
 .btn-count {

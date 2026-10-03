@@ -38,7 +38,13 @@ export default function Sidebar(props: {
   return (
     <aside class="sidebar">
       <div class="brand">
-        <button class="icon-btn" onClick={() => props.onCollapse()} title="Recolher barra lateral">
+        <button
+          class="icon-btn"
+          onClick={() => props.onCollapse()}
+          aria-label="Recolher barra lateral"
+          data-tip="Recolher (Ctrl+B)"
+          data-tip-align="start"
+        >
           <Icon name="sidebar" />
         </button>
         <Logo />
@@ -65,7 +71,9 @@ export default function Sidebar(props: {
           class="icon-btn"
           classList={{ active: props.selection.kind === "new" }}
           onClick={() => props.onSelect({ kind: "new" })}
-          title="Nova thread"
+          aria-label="Nova thread"
+          data-tip="Nova thread (Ctrl+N)"
+          data-tip-align="end"
         >
           <Icon name="edit" />
         </button>
