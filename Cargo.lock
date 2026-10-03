@@ -1587,6 +1587,7 @@ name = "ide-mcp"
 version = "0.1.0"
 dependencies = [
  "ide-core",
+ "ide-lint",
  "ide-lsp",
  "ide-syntax",
  "serde_json",

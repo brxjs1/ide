@@ -102,6 +102,8 @@ impl Server {
             "project_tree" => self.project_tree(args),
             "diagnostics" => self.diagnostics(args),
             "definition" => self.definition(args),
+            "code_issues" => self.code_issues(args),
+            "task_board" => self.task_board(),
             other => Err(format!("ferramenta desconhecida: {other}")),
         };
         match outcome {
@@ -361,6 +363,88 @@ impl Server {
             .join("\n"))
     }
 
+    /// Problemas de qualidade (crates/lint) de um arquivo, ou resumo do projeto.
+    fn code_issues(&self, args: &Value) -> Result<String, String> {
+        let describe = |i: &ide_lint::Issue| {
+            let fix = ide_lint::rule(i.rule)
+                .map(|r| format!("\n    como corrigir: {}", r.fix))
+                .unwrap_or_default();
+            format!(
+                "{}:{} [{} {:?}/{:?}] {}{fix}",
+                i.span.line, i.span.column, i.rule, i.kind, i.severity, i.message
+            )
+        };
+        if args["path"].is_string() {
+            let (rel, abs) = self.path_arg(args)?;
+            let issues = ide_lint::lint_path(&abs).map_err(|e| e.to_string())?;
+            if issues.is_empty() {
+                return Ok(format!("{rel}: nenhum problema encontrado"));
+            }
+            let lines: Vec<String> = issues
+                .iter()
+                .map(|i| format!("{rel}:{}", describe(i)))
+                .collect();
+            return Ok(lines.join("\n"));
+        }
+        let report = ide_lint::lint_project(&self.root, 5000);
+        let r = &report.ratings;
+        let mut out = format!(
+            "{} arquivos, {} linhas · notas: manutenibilidade {}, confiabilidade {}, segurança {} · dívida {} min\n",
+            report.files_analyzed, report.lines, r.maintainability, r.reliability, r.security, r.debt_minutes
+        );
+        let limit = args["limit"].as_u64().unwrap_or(40).clamp(1, 500) as usize;
+        let mut shown = 0;
+        'files: for file in &report.files {
+            for issue in &file.issues {
+                if shown == limit {
+                    out.push_str("… (use 'path' para ver um arquivo inteiro)\n");
+                    break 'files;
+                }
+                let _ = writeln!(out, "{}:{}", file.path, describe(issue));
+                shown += 1;
+            }
+        }
+        if report.files.is_empty() {
+            out.push_str("nenhum problema encontrado\n");
+        }
+        Ok(out)
+    }
+
+    /// Quadro de tarefas de `.project/tasks/` (a fazer / em progresso / concluídas).
+    fn task_board(&self) -> Result<String, String> {
+        let tasks = ide_core::board::list(&self.root).map_err(|e| e.to_string())?;
+        if tasks.is_empty() {
+            return Ok("Quadro vazio (.project/tasks/ sem tarefas).".into());
+        }
+        let mut out = String::new();
+        for status in [
+            ide_core::board::Status::Doing,
+            ide_core::board::Status::Todo,
+            ide_core::board::Status::Done,
+        ] {
+            let group: Vec<_> = tasks.iter().filter(|t| t.status == status).collect();
+            if group.is_empty() {
+                continue;
+            }
+            let _ = writeln!(out, "## {} ({})", status.label(), group.len());
+            for t in group {
+                let progress = if t.checklist_total > 0 {
+                    format!(" [{}/{}]", t.checklist_done, t.checklist_total)
+                } else {
+                    String::new()
+                };
+                let priority = t
+                    .priority
+                    .as_deref()
+                    .map(|p| format!(" ({p})"))
+                    .unwrap_or_default();
+                let _ = writeln!(out, "- {}{priority}{progress} — {}", t.title, t.path);
+            }
+        }
+        out.push_str("Para mudar o status, edite a linha `- Status:` do arquivo (a fazer | em progresso | concluída).");
+        Ok(out)
+    }
+
     pub fn shutdown(&self) {
         self.lsp.shutdown();
     }
@@ -400,6 +484,21 @@ fn tools() -> Value {
                 "path": path,
                 "timeout": { "type": "integer", "minimum": 1, "maximum": 60, "description": "Segundos de espera (padrão 20)" }
             }, "required": ["path"] },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "code_issues",
+            "description": "Problemas de qualidade no estilo SonarLint (bugs, vulnerabilidades, code smells) com a regra e como corrigir. Com 'path', um arquivo; sem, o resumo do projeto com notas A-E. Só lê arquivos (tree-sitter).",
+            "inputSchema": { "type": "object", "properties": {
+                "path": path,
+                "limit": { "type": "integer", "minimum": 1, "maximum": 500, "description": "Máximo de problemas no resumo do projeto (padrão 40)" }
+            } },
+            "annotations": { "readOnlyHint": true }
+        },
+        {
+            "name": "task_board",
+            "description": "Quadro de tarefas do projeto (.project/tasks/): o que está a fazer, em progresso e concluído, com prioridade e progresso do checklist.",
+            "inputSchema": { "type": "object", "properties": {} },
             "annotations": { "readOnlyHint": true }
         },
         {
@@ -470,6 +569,8 @@ mod tests {
                 "find_symbol",
                 "project_tree",
                 "diagnostics",
+                "code_issues",
+                "task_board",
                 "definition"
             ]
         );
@@ -601,6 +702,50 @@ process.stdin.on("data", (chunk) => {
         assert!(!err, "{text}");
         assert_eq!(text, "src/lib.rs:3:12");
         server.shutdown();
+    }
+
+    #[test]
+    fn problemas_de_qualidade_e_quadro_de_tarefas() {
+        let dir = project();
+        std::fs::write(
+            dir.path().join("src/app.ts"),
+            "var total: any = 1;\nif (total == 2) { }\n",
+        )
+        .unwrap();
+        let server = Server::new(dir.path().to_path_buf());
+
+        let (err, text) = call(&server, "code_issues", json!({ "path": "src/app.ts" }));
+        assert!(!err, "{text}");
+        assert!(text.contains("src/app.ts:1:1 [S3504"), "{text}");
+        assert!(text.contains("como corrigir:"), "{text}");
+        let (_, project) = call(&server, "code_issues", json!({}));
+        assert!(
+            project.starts_with("1 arquivos") || project.contains("arquivos,"),
+            "{project}"
+        );
+        assert!(project.contains("S1440"), "{project}");
+        let (_, clean) = call(&server, "code_issues", json!({ "path": "src/lib.rs" }));
+        assert_eq!(clean, "src/lib.rs: nenhum problema encontrado");
+        let (err, _) = call(&server, "code_issues", json!({ "path": "../fora.ts" }));
+        assert!(err);
+
+        let (_, empty) = call(&server, "task_board", json!({}));
+        assert!(empty.starts_with("Quadro vazio"));
+        ide_core::board::create(
+            dir.path(),
+            "Validar CPF",
+            ide_core::board::Status::Doing,
+            Some("alta"),
+            None,
+        )
+        .unwrap();
+        let (_, board) = call(&server, "task_board", json!({}));
+        assert!(
+            board.contains(
+                "## em progresso (1)\n- Validar CPF (alta) — .project/tasks/validar-cpf.md"
+            ),
+            "{board}"
+        );
     }
 
     #[test]
