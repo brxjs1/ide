@@ -174,8 +174,33 @@ pub fn merge(root: &Path, slug: &str) -> Result<String> {
         return Err(Error::NothingToMerge(slug.to_owned()));
     }
     let main = main_root(root)?;
-    if !git::run(&main, &["status", "--porcelain", "--untracked-files=no"])?.is_empty() {
+    // O quadro (.project/tasks/) é atualizado pelo app no checkout principal enquanto a
+    // tarefa roda (status, worktree): isso não bloqueia o merge — a não ser que o branch
+    // também mude um desses arquivos, e aí o git recusaria. Melhor dizer antes, e quais.
+    let (board, outside): (Vec<String>, Vec<String>) = dirty_paths(&main)?
+        .into_iter()
+        .partition(|p| p.starts_with(&format!("{}/", crate::board::DIR)));
+    if !outside.is_empty() {
         return Err(Error::MainDirty);
+    }
+    if !board.is_empty() {
+        let changed = git::run(
+            &main,
+            &[
+                "diff",
+                "--name-only",
+                "-z",
+                &format!("HEAD...{}", task.branch),
+            ],
+        )?;
+        let both: Vec<String> = changed
+            .split('\0')
+            .filter(|p| board.iter().any(|b| b == p))
+            .map(str::to_owned)
+            .collect();
+        if !both.is_empty() {
+            return Err(Error::BoardConflict(both.join(", ")));
+        }
     }
 
     let message = match &task.goal {
@@ -191,6 +216,27 @@ pub fn merge(root: &Path, slug: &str) -> Result<String> {
         return Err(Error::MergeConflict(e.to_string()));
     }
     git::run(&main, &["rev-parse", "--short", "HEAD"])
+}
+
+/// Arquivos versionados alterados no checkout.
+/// `-z`: caminhos crus separados por NUL (sem aspas nem ambiguidade com " -> "); num
+/// rename vêm destino e origem, e os dois contam.
+fn dirty_paths(main: &Path) -> Result<Vec<String>> {
+    let status = git::run(
+        main,
+        &["status", "--porcelain=v1", "-z", "--untracked-files=no"],
+    )?;
+    let mut entries = status.split('\0').filter(|e| !e.is_empty());
+    let mut dirty = Vec::new();
+    while let Some(entry) = entries.next() {
+        let code = entry.get(..2).unwrap_or_default();
+        let mut paths = vec![entry.get(3..).unwrap_or_default().to_owned()];
+        if code.contains('R') || code.contains('C') {
+            paths.extend(entries.next().map(str::to_owned));
+        }
+        dirty.extend(paths);
+    }
+    Ok(dirty)
 }
 
 /// Remove o worktree e o branch da tarefa (com a config do branch).
@@ -324,10 +370,55 @@ mod tests {
         assert!(matches!(merge(&root, "x"), Err(Error::MainDirty)));
         git_in(&root, &["checkout", "--", "a.txt"]);
 
+        // O quadro mudou no checkout principal (status da tarefa): não bloqueia.
+        let board = crate::board::create(
+            &root,
+            "Melhorar a linha",
+            crate::board::Status::Todo,
+            None,
+            None,
+        )
+        .unwrap();
+        git_in(&root, &["add", "."]);
+        git_in(&root, &["commit", "-qm", "quadro"]);
+        crate::board::set_status(&root, &board.slug, crate::board::Status::Doing).unwrap();
+        // ...mas um arquivo com nome parecido, fora da pasta, bloqueia.
+        std::fs::write(root.join(".project/tasks.md"), "x").unwrap();
+        git_in(&root, &["add", ".project/tasks.md"]);
+        git_in(&root, &["commit", "-qm", "parecido"]);
+        std::fs::write(root.join(".project/tasks.md"), "mudou").unwrap();
+        assert!(matches!(merge(&root, "x"), Err(Error::MainDirty)));
+        git_in(&root, &["checkout", "--", ".project/tasks.md"]);
+        // Rename de fora para dentro do quadro também bloqueia.
+        git_in(&root, &["mv", "a.txt", ".project/tasks/a.md"]);
+        assert!(matches!(merge(&root, "x"), Err(Error::MainDirty)));
+        git_in(&root, &["mv", ".project/tasks/a.md", "a.txt"]);
+
         merge(&root, "x").unwrap();
         assert!(root.join("b.txt").exists());
         let subject = git::run(&root, &["log", "-1", "--format=%s"]).unwrap();
         assert_eq!(subject, "Merge task/x: Melhorar a");
+    }
+
+    #[test]
+    fn branch_que_muda_o_quadro_sujo_falha_antes_do_merge() {
+        let (_tmp, root) = repo();
+        let board =
+            crate::board::create(&root, "Tarefa", crate::board::Status::Todo, None, None).unwrap();
+        git_in(&root, &["add", "."]);
+        git_in(&root, &["commit", "-qm", "quadro"]);
+        let task = create(&root, "x", "objetivo").unwrap();
+        // O agente mexeu no arquivo da tarefa no branch, e o app também, no checkout.
+        commit_in(&task.path, &board.path, "# Tarefa\n\n- Status: concluída\n");
+        crate::board::set_status(&root, &board.slug, crate::board::Status::Doing).unwrap();
+        match merge(&root, "x") {
+            Err(Error::BoardConflict(files)) => assert_eq!(files, board.path),
+            other => panic!("esperava BoardConflict, veio {other:?}"),
+        }
+        // Nada foi integrado e o quadro local ficou como estava.
+        assert!(
+            crate::board::get(&root, &board.slug).unwrap().status == crate::board::Status::Doing
+        );
     }
 
     #[test]

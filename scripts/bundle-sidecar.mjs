@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// Prepara o sidecar do agente para o instalador: build + `pnpm deploy` com
-// dependências de produção em pastas reais (sem symlinks) dentro dos recursos do Tauri.
+// Prepara o que vai junto no instalador: o sidecar do agente (build + `pnpm deploy` com
+// dependências de produção em pastas reais, sem symlinks, nos recursos do Tauri) e o
+// servidor MCP `ide-mcp` (externalBin).
 // Uso: node scripts/bundle-sidecar.mjs   (chamado por `pnpm build`)
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
@@ -32,3 +33,20 @@ if (process.platform === "linux" && existsSync(scoped)) {
   }
 }
 console.log(`bundle-sidecar: pronto em ${out}`);
+
+// Servidor MCP (crates/mcp): vai como externalBin, instalado ao lado do executável do app,
+// onde ide_agent::locate_mcp o procura. O Tauri exige o sufixo com o target triple.
+// O Tauri informa o alvo do build (`--target`); sem ele, é o da máquina.
+const host = /host: (\S+)/.exec(execFileSync("rustc", ["-vV"]).toString())?.[1];
+const triple = process.env.TAURI_ENV_TARGET_TRIPLE || host;
+if (!triple) throw new Error("bundle-sidecar: não foi possível descobrir o target triple (rustc -vV)");
+const cross = triple !== host;
+execFileSync("cargo", ["build", "--release", "-p", "ide-mcp", ...(cross ? ["--target", triple] : [])], {
+  cwd: root,
+  stdio: "inherit",
+});
+const exe = process.platform === "win32" ? ".exe" : "";
+const binDir = join(root, "apps/desktop/src-tauri/binaries");
+mkdirSync(binDir, { recursive: true });
+copyFileSync(join(root, `target/${cross ? `${triple}/` : ""}release/ide-mcp${exe}`), join(binDir, `ide-mcp-${triple}${exe}`));
+console.log(`bundle-sidecar: ide-mcp-${triple}${exe} pronto`);

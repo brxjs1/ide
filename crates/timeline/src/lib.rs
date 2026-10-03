@@ -71,7 +71,8 @@ pub struct Timeline {
     conn: Mutex<Connection>,
 }
 
-const MIGRATIONS: &[&str] = &["CREATE TABLE events (
+const MIGRATIONS: &[&str] = &[
+    "CREATE TABLE events (
         id      INTEGER PRIMARY KEY AUTOINCREMENT,
         ts      INTEGER NOT NULL,
         project TEXT    NOT NULL,
@@ -79,7 +80,14 @@ const MIGRATIONS: &[&str] = &["CREATE TABLE events (
         summary TEXT    NOT NULL,
         data    TEXT    NOT NULL DEFAULT 'null'
     );
-    CREATE INDEX events_project_id ON events (project, id DESC);"];
+    CREATE INDEX events_project_id ON events (project, id DESC);",
+    // 2: configurações do app (orçamento, Sentinela...) e índice para consultas por dia.
+    "CREATE TABLE settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
+    CREATE INDEX events_kind_ts ON events (kind, ts);",
+];
 
 impl Timeline {
     pub fn open(path: &Path) -> Result<Self> {
@@ -190,6 +198,80 @@ impl Timeline {
     }
 }
 
+/// Contagem de eventos de um projeto em um intervalo (para o resumo do dia).
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Stats {
+    pub prompts: u32,
+    pub tools: u32,
+    pub errors: u32,
+    pub terminals: u32,
+    pub tasks_created: u32,
+    pub tasks_merged: u32,
+    pub cost_usd: f64,
+}
+
+impl Timeline {
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
+        Ok(self
+            .lock()
+            .query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| {
+                r.get(0)
+            })
+            .optional()?)
+    }
+
+    pub fn set_setting(&self, key: &str, value: &str) -> Result<()> {
+        self.lock().execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+            params![key, value],
+        )?;
+        Ok(())
+    }
+
+    /// Gasto do agente (soma de `costUsd` dos `agent.done`) desde `since_ms`, em todos
+    /// os projetos — o orçamento é da pessoa, não do projeto.
+    pub fn cost_since(&self, since_ms: i64) -> Result<f64> {
+        Ok(self.lock().query_row(
+            "SELECT COALESCE(SUM(json_extract(data, '$.costUsd')), 0.0)
+             FROM events WHERE kind = ?1 AND ts >= ?2",
+            params![kind::AGENT_DONE, since_ms],
+            |r| r.get(0),
+        )?)
+    }
+
+    pub fn stats_since(&self, project: &str, since_ms: i64) -> Result<Stats> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT kind, COUNT(*), COALESCE(SUM(json_extract(data, '$.costUsd')), 0.0)
+             FROM events WHERE project = ?1 AND ts >= ?2 GROUP BY kind",
+        )?;
+        let rows = stmt.query_map(params![project, since_ms], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, u32>(1)?,
+                r.get::<_, f64>(2)?,
+            ))
+        })?;
+        let mut stats = Stats::default();
+        for row in rows {
+            let (k, count, cost) = row?;
+            match k.as_str() {
+                kind::AGENT_PROMPT => stats.prompts = count,
+                kind::AGENT_TOOL => stats.tools = count,
+                kind::AGENT_ERROR => stats.errors = count,
+                kind::TERMINAL_START => stats.terminals = count,
+                kind::TASK_CREATE => stats.tasks_created = count,
+                kind::TASK_MERGE => stats.tasks_merged = count,
+                kind::AGENT_DONE => stats.cost_usd = cost,
+                _ => {}
+            }
+        }
+        Ok(stats)
+    }
+}
+
 fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -221,6 +303,46 @@ mod tests {
         assert_eq!(summaries, ["segundo", "primeiro"]);
         assert_eq!(events[0], last);
         assert_eq!(events[0].data["costUsd"], 0.5);
+    }
+
+    #[test]
+    fn configuracoes_sobrescrevem() {
+        let tl = Timeline::open_in_memory().unwrap();
+        assert_eq!(tl.get_setting("budget").unwrap(), None);
+        tl.set_setting("budget", "1.5").unwrap();
+        tl.set_setting("budget", "2").unwrap();
+        assert_eq!(tl.get_setting("budget").unwrap().as_deref(), Some("2"));
+    }
+
+    #[test]
+    fn gasto_e_estatisticas_desde() {
+        let tl = Timeline::open_in_memory().unwrap();
+        let done = |p: &str, cost: serde_json::Value| {
+            tl.append(
+                NewEvent::new(p, kind::AGENT_DONE, "ok").with_data(json!({ "costUsd": cost })),
+            )
+            .unwrap()
+        };
+        let old = done("/a", json!(9.0));
+        let since = old.ts + 1;
+        // Eventos "antigos" ficam antes de `since` ajustando o ts direto no banco.
+        tl.lock()
+            .execute("UPDATE events SET ts = ts - 10 WHERE id = ?1", [old.id])
+            .unwrap();
+        done("/a", json!(0.25));
+        done("/b", json!(0.5));
+        done("/a", json!(null));
+        tl.append(NewEvent::new("/a", kind::AGENT_PROMPT, "p"))
+            .unwrap();
+        tl.append(NewEvent::new("/a", kind::TASK_MERGE, "m"))
+            .unwrap();
+
+        let since = since - 10;
+        assert!((tl.cost_since(since).unwrap() - 0.75).abs() < 1e-9);
+        let stats = tl.stats_since("/a", since).unwrap();
+        assert_eq!(stats.prompts, 1);
+        assert_eq!(stats.tasks_merged, 1);
+        assert!((stats.cost_usd - 0.25).abs() < 1e-9);
     }
 
     #[test]

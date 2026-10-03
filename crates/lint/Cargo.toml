@@ -1,0 +1,15 @@
+[package]
+name = "ide-lint"
+description = "Análise de qualidade de código no estilo do SonarLint, sobre tree-sitter."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ide-syntax.workspace = true
+ignore = "0.4"
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile = "3"

@@ -1,5 +1,9 @@
 mod agent;
+mod board;
+mod budget;
 mod commands;
+mod editor;
+mod quality;
 mod state;
 mod terminal;
 
@@ -26,6 +30,27 @@ pub fn run() {
             commands::task_diff,
             commands::task_merge,
             commands::task_discard,
+            commands::settings_get,
+            commands::settings_set,
+            commands::daily_brief,
+            editor::files_tree,
+            editor::file_read,
+            editor::file_write,
+            editor::file_outline,
+            editor::lsp_open,
+            editor::lsp_change,
+            editor::lsp_save,
+            editor::lsp_close,
+            editor::lsp_hover,
+            editor::lsp_definition,
+            quality::lint_source,
+            quality::lint_project,
+            quality::lint_rules,
+            board::board_list,
+            board::board_create,
+            board::board_set_status,
+            board::board_set_meta,
+            board::board_delete,
             terminal::pty_spawn,
             terminal::pty_write,
             terminal::pty_resize,
@@ -33,6 +58,11 @@ pub fn run() {
             agent::agent_send,
             agent::agent_stop,
         ])
-        .run(tauri::generate_context!())
-        .expect("falha ao iniciar o app");
+        .build(tauri::generate_context!())
+        .expect("falha ao iniciar o app")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                editor::shutdown(app);
+            }
+        });
 }

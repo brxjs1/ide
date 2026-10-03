@@ -5,8 +5,15 @@ import { Show, createSignal, onCleanup, onMount } from "solid-js";
 
 import { ptyKill, ptyResize, ptySpawn, ptyWrite } from "../lib/ipc";
 
-const DARK = { background: "#141417", foreground: "#e6e6ea", cursor: "#7b9cff", selectionBackground: "#3a3f55" };
-const LIGHT = { background: "#ffffff", foreground: "#1d1d20", cursor: "#3b6ef5", selectionBackground: "#cdd8ff" };
+// Mesmas cores do tema escuro do app (--term-bg, --fg, --accent).
+// Preto do card principal; cursor e seleção azuis como no T3 Code.
+const THEME = {
+  background: "#0a0a0a",
+  foreground: "#e8e9ed",
+  cursor: "#b4cbff",
+  cursorAccent: "#0a0a0a",
+  selectionBackground: "rgba(180, 203, 255, 0.25)",
+};
 
 /** Espera da saída "assentar" antes de avisar atividade (um comando terminou, em geral). */
 const SETTLE_MS = 800;
@@ -44,13 +51,12 @@ export default function Terminal(props: { cwd: string; onSettled?: () => void })
   };
 
   onMount(() => {
-    const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     term = new XTerm({
       cursorBlink: true,
       fontFamily: 'ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace',
       fontSize: 13,
       scrollback: 5000,
-      theme: dark ? DARK : LIGHT,
+      theme: THEME,
     });
     fit = new FitAddon();
     term.loadAddon(fit);

@@ -6,6 +6,9 @@
   "bundle": {
     "resources": {
       "resources/agent/": "agent/"
-    }
+    },
+    "externalBin": [
+      "binaries/ide-mcp"
+    ]
   }
 }

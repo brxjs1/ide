@@ -28,6 +28,7 @@ pub fn agent_send(
         ..
     } = &message
     {
+        crate::budget::check(&state.timeline, conversation)?;
         // Autonomia total nunca roda no branch do usuário: só dentro de um worktree de tarefa.
         if mode.requires_task_worktree() && !tasks::is_task_worktree(Path::new(cwd)) {
             return Err("autonomia total só é permitida dentro de um worktree de tarefa".into());

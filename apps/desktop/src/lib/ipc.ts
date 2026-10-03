@@ -79,3 +79,185 @@ export const taskCreate = (root: string, slug: string, goal: string) =>
 export const taskDiff = (root: string, slug: string) => invoke<string>("task_diff", { root, slug });
 export const taskMerge = (root: string, slug: string) => invoke<string>("task_merge", { root, slug });
 export const taskDiscard = (root: string, slug: string) => invoke<void>("task_discard", { root, slug });
+
+export interface Commit {
+  hash: string;
+  subject: string;
+  author: string;
+  /** Segundos Unix. */
+  time: number;
+  merge: boolean;
+}
+
+export interface Stats {
+  prompts: number;
+  tools: number;
+  errors: number;
+  terminals: number;
+  tasksCreated: number;
+  tasksMerged: number;
+  costUsd: number;
+}
+
+export interface Brief {
+  /** Meia-noite local, em ms. */
+  since: number;
+  commits: Commit[];
+  tasks: Task[];
+  changed: ChangedFile[];
+  stats: Stats;
+  spentToday: number;
+  budgetUsd: number | null;
+}
+
+export const dailyBrief = (root: string) => invoke<Brief>("daily_brief", { root });
+
+export type SettingKey = "budget_usd" | "sentinel_enabled" | "sentinel_idle_min" | "composer";
+export const settingsGet = (key: SettingKey) => invoke<string | null>("settings_get", { key });
+export const settingsSet = (key: SettingKey, value: string) => invoke<void>("settings_set", { key, value });
+
+// Editor (crates/core::files, crates/syntax, crates/lsp).
+export interface FileEntry {
+  path: string;
+  dir: boolean;
+}
+
+export interface CodeSymbol {
+  name: string;
+  kind: string;
+  line: number;
+  endLine: number;
+  container: string | null;
+  depth: number;
+}
+
+export interface LspPosition {
+  line: number;
+  character: number;
+}
+
+export interface LspRange {
+  start: LspPosition;
+  end: LspPosition;
+}
+
+export interface LspDiagnostic {
+  range: LspRange;
+  severity: number;
+  message: string;
+  source: string | null;
+  /** Código do erro no servidor: "2322" (TypeScript), "E0308" (Rust)... */
+  code: string | null;
+}
+
+export interface LspTarget {
+  path: string | null;
+  absolute: string;
+  range: LspRange;
+}
+
+export const filesTree = (root: string) => invoke<FileEntry[]>("files_tree", { root });
+export const fileRead = (root: string, path: string) => invoke<string>("file_read", { root, path });
+export const fileWrite = (root: string, path: string, content: string) =>
+  invoke<void>("file_write", { root, path, content });
+export const fileOutline = (root: string, path: string) => invoke<CodeSymbol[]>("file_outline", { root, path });
+export const lspOpen = (root: string, path: string, text: string) => invoke<boolean>("lsp_open", { root, path, text });
+export const lspChange = (root: string, path: string, version: number, text: string) =>
+  invoke<void>("lsp_change", { root, path, version, text });
+export const lspSave = (root: string, path: string, text: string) =>
+  invoke<void>("lsp_save", { root, path, text });
+export const lspClose = (root: string, path: string) => invoke<void>("lsp_close", { root, path });
+export const lspHover = (root: string, path: string, line: number, character: number) =>
+  invoke<string | null>("lsp_hover", { root, path, line, character });
+export const lspDefinition = (root: string, path: string, line: number, character: number) =>
+  invoke<LspTarget[]>("lsp_definition", { root, path, line, character });
+
+// Qualidade de código (crates/lint) — espelha ide_lint::{Issue, Rule, ProjectReport}.
+export type IssueKind = "bug" | "vulnerability" | "security-hotspot" | "code-smell";
+export type IssueSeverity = "info" | "minor" | "major" | "critical" | "blocker";
+
+export interface CodeSpan {
+  line: number;
+  column: number;
+  endLine: number;
+  endColumn: number;
+}
+
+export interface CodeFix {
+  title: string;
+  edits: (CodeSpan & { text: string })[];
+}
+
+export interface CodeIssue extends CodeSpan {
+  rule: string;
+  message: string;
+  kind: IssueKind;
+  severity: IssueSeverity;
+  fix: CodeFix | null;
+  /** Dá para ignorar com um comentário na linha anterior (não está dentro de string ou JSX). */
+  suppressible: boolean;
+}
+
+export interface LintRule {
+  key: string;
+  name: string;
+  kind: IssueKind;
+  severity: IssueSeverity;
+  scope: "js" | "ts" | "any";
+  debtMinutes: number;
+  tags: string[];
+  why: string;
+  fix: string;
+  noncompliant: string;
+  compliant: string;
+}
+
+export interface Ratings {
+  maintainability: string;
+  reliability: string;
+  security: string;
+  debtMinutes: number;
+}
+
+export interface ProjectReport {
+  files: { path: string; lines: number; issues: CodeIssue[] }[];
+  filesAnalyzed: number;
+  lines: number;
+  ratings: Ratings;
+  truncated: boolean;
+}
+
+export const lintSource = (root: string, path: string, text: string) =>
+  invoke<CodeIssue[]>("lint_source", { root, path, text });
+export const lintProject = (root: string) => invoke<ProjectReport>("lint_project", { root });
+export const lintRules = () => invoke<LintRule[]>("lint_rules");
+
+// Quadro de tarefas (crates/core::board) — espelha ide_core::board::BoardTask.
+export type TaskStatus = "todo" | "doing" | "done";
+
+export interface BoardTask {
+  slug: string;
+  title: string;
+  status: TaskStatus;
+  priority: string | null;
+  worktree: string | null;
+  checklistDone: number;
+  checklistTotal: number;
+  summary: string;
+  path: string;
+  updated: number;
+}
+
+export const boardList = (root: string) => invoke<BoardTask[]>("board_list", { root });
+export const boardCreate = (
+  root: string,
+  title: string,
+  status: TaskStatus,
+  priority: string | null,
+  description: string | null,
+) => invoke<BoardTask>("board_create", { root, title, status, priority, description });
+export const boardSetStatus = (root: string, slug: string, status: TaskStatus) =>
+  invoke<BoardTask>("board_set_status", { root, slug, status });
+export const boardSetMeta = (root: string, slug: string, key: "Prioridade" | "Worktree", value: string | null) =>
+  invoke<BoardTask>("board_set_meta", { root, slug, key, value });
+export const boardDelete = (root: string, slug: string) => invoke<void>("board_delete", { root, slug });

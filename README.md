@@ -1,3 +1,5 @@
+<img src="apps/desktop/src-tauri/icons/128x128.png" alt="" width="64" align="right">
+
 # ide — AI Development OS pessoal
 
 Ambiente de desenvolvimento sob medida, local-first, construído em volta de um agente.
@@ -5,46 +7,81 @@ Visão completa e fases em [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## App desktop (Tauri 2 + SolidJS)
 
-![Tarefa autônoma em worktree](docs/images/tarefa.png)
+![Tela inicial](docs/images/inicio.png)
 
 | | |
 |---|---|
-| ![Revisão automática da tarefa](docs/images/revisao.png) | ![Timeline](docs/images/timeline.png) |
-| ![Agente com aprovação de comando](docs/images/agente.png) | ![Diff e terminal](docs/images/diff-terminal.png) |
+| ![Thread em worktree com revisão automática](docs/images/thread-worktree.png) | ![Sentinela e resumo do dia](docs/images/sentinela-hoje.png) |
+| ![Editor com diagnósticos do rust-analyzer](docs/images/editor.png) | ![Hover com o erro do compilador](docs/images/editor-hover.png) |
+| ![Paleta de comandos (Ctrl+K) achando thread e arquivo](docs/images/paleta.png) | ![Quadro de tarefas: a fazer, em progresso, concluídas](docs/images/quadro.png) |
+| ![Error Lens com os erros do TypeScript em português](docs/images/error-lens.png) | ![Explicação do erro TS2322 no hover](docs/images/explicacao-ts.png) |
+| ![Painel Problemas com notas A–E e a regra explicada](docs/images/problemas.png) | |
 
-O que já funciona:
+Interface centrada em **threads**, em **preto moderno** com a linguagem visual do T3 Code
+(Fase 5, ADR 0005): corpo e barra lateral em preto puro, a área principal como um card
+inset com textura sutil, superfícies flutuantes de vidro e estados por transparência.
 
-- **Tarefas autônomas** (Fase 2): descreva objetivo e critérios; o app cria um worktree
-  `task/<slug>`, o agente trabalha nele **sem pedir aprovação** e faz commits, e uma
-  **revisão automática** (contexto limpo, roda os testes, não pode editar) dá o veredito.
-  Você vê o diff contra a base e escolhe **Integrar** (merge commit; o worktree é
-  removido) ou **Descartar**. Várias tarefas rodam em paralelo.
-- **Agente** (Claude Agent SDK num sidecar Node): chat com streaming de texto e
-  ferramentas, sessões independentes por conversa, interromper e níveis de autonomia:
+- **Qualidade de código** (Fase 6, ADR 0006), com o SonarLint como referência:
+  - **regras para JS/TS** (bugs, vulnerabilidades, pontos de segurança e code smells),
+    com tipo, severidade, "por que é um problema", "como corrigir" e exemplos;
+  - **análise ao vivo**, enquanto você digita;
+  - **correções automáticas** (`Ctrl+.`) e "ignorar nesta linha";
+  - **painel Problemas** com notas A–E e dívida técnica.
+- **Error Lens próprio**: a mensagem aparece no fim da linha, colorida pela severidade.
+  Os erros do TypeScript vêm traduzidos pelo **gerador de explicações**, que cobre 49
+  erros do TS e 13 do Rust e diz o que aconteceu, por que e como resolver
+  (também no hover).
+- **Quadro de tarefas**: a fazer, em progresso e concluídas, em `.project/tasks/*.md`,
+  com prioridade e progresso do checklist.
+  - Arraste os cartões, ou use as setas.
+  - **Executar com o agente** abre a tarefa num worktree. Integrar conclui a tarefa.
+  - O agente lê o quadro pela ferramenta `task_board`.
+- **Paleta de comandos** (`Ctrl+K`): ações, threads e arquivos com busca aproximada;
+  `Ctrl+P` abre direto a busca de arquivos. Atalhos: `Ctrl+N` nova thread, `Ctrl+B` barra
+  lateral, `Ctrl+J` terminal, `Ctrl+S` salvar no editor.
 
-  | Modo | Leitura | Edição | Comandos | Onde |
+- **Uma lista de threads** para tudo: conversas no checkout atual e tarefas autônomas em
+  worktree, com busca, idade, selos (trabalhando, aguarda você, veredito da revisão) e
+  seção de concluídas. Threads ficam salvas e continuam depois de reiniciar o app.
+- **Composer** com modelo (Opus 5.5, Sonnet 5.5, Haiku 4.5, Fable 5.1), esforço de
+  raciocínio e nível de acesso; embaixo, **Checkout atual** ou **Novo worktree**.
+  Escolher worktree cria `task/<slug>`, o agente trabalha sem pedir aprovação e uma
+  **revisão automática** (contexto limpo, roda testes, não edita) aparece na thread.
+  A barra superior oferece **Revisar · Integrar · Descartar**.
+- **Sentinela** (Fase 4): agente em background que, quando você fica ocioso, revisa as
+  alterações não commitadas procurando só bloqueantes. Opt-in, esforço baixo, avisa no topo.
+- **Hoje** (Fase 4): gasto do dia com **orçamento diário** (corta a Sentinela), atividade,
+  tarefas abertas e commits de hoje — calculado localmente, sem chamar o modelo.
+- **Editor** (Fase 3): Monaco com abas, árvore de arquivos (respeita `.gitignore`),
+  outline (tree-sitter) e **servidor de linguagem** — erros sublinhados, hover, F12 para
+  a definição (inclusive em outro arquivo); Ctrl+S salva e o servidor verifica de novo. Usa
+  rust-analyzer, typescript-language-server, pyright ou gopls do PATH.
+- **Ferramentas para o agente** (Fase 3): o binário `ide-mcp` expõe via MCP
+  `outline_file`, `find_symbol`, `project_tree`, `code_issues`, `task_board`, `diagnostics` e
+  `definition` — o agente
+  vê a estrutura e os erros reais sem ler arquivos inteiros nem rodar o build. As de
+  servidor de linguagem pedem aprovação (ele executa código do projeto, ver ADR 0004).
+- **Painel lateral** com Alterações (diff), Arquivos, Timeline e Hoje; **terminal** recolhível que
+  mantém o shell vivo; avisos no topo para erros, integrações e achados da Sentinela.
+
+  | Acesso | Leitura | Edição | Comandos | Onde |
   |---|---|---|---|---|
   | Planejar | automática | bloqueada | bloqueados | qualquer lugar |
   | Assistido | automática | pede aprovação | pede aprovação | qualquer lugar |
   | Autônomo | automática | automática | pede aprovação | qualquer lugar |
-  | Total | automática | automática | automáticos | só worktree de tarefa |
+  | Acesso total | automática | automática | automáticos | só worktree de tarefa |
   | Revisão | automática | bloqueada | automáticos | só worktree de tarefa |
-
-- **Revisar antes do commit**: na aba Diff, "Revisar com o agente" manda o diff do
-  branch atual para uma revisão no formato de `.project/conventions/code-review.md`.
-
-- **Terminal** real (PTY) com o seu shell, cores e redimensionamento.
-- **Diff** do working tree contra o HEAD, inclusive arquivos novos.
-- **Timeline** em SQLite: prompts, ferramentas usadas, custo e terminais, por projeto.
-- Barra lateral com branch, alterações e worktrees, atualizada ao fim de cada execução
-  do agente e quando a saída do terminal assenta (depois de um `git commit`, por exemplo).
 
 Monorepo com pnpm workspaces + Cargo workspace. Estrutura e regras em
 [`.project/architecture/monorepo.md`](.project/architecture/monorepo.md).
 
 ```text
 apps/desktop/        @ide/desktop — UI Solid + src-tauri (comandos finos)
-crates/core/         ide-core — git: projeto, worktrees, diff
+crates/core/         ide-core — git: projeto, worktrees, diff, arquivos
+crates/syntax/       ide-syntax — tree-sitter: outline e símbolos
+crates/lsp/          ide-lsp — cliente LSP e servidores por linguagem
+crates/lint/         ide-lint — qualidade de código (regras estilo SonarLint, notas A–E)
+crates/mcp/          ide-mcp — servidor MCP com as ferramentas do agente
 crates/pty/          ide-pty — terminais
 crates/timeline/     ide-timeline — eventos em SQLite
 crates/agent/        ide-agent — ponte com o sidecar (JSON lines)
@@ -65,7 +102,7 @@ pnpm check      # typecheck + fmt + clippy + testes (Rust e sidecar)
 pnpm build      # instaladores em target/release/bundle, com o sidecar embutido
 ```
 
-O instalador leva o sidecar e o CLI nativo do Claude Code (~280 MB no Linux); o Node
+O instalador leva o sidecar, o `ide-mcp` e o CLI nativo do Claude Code (~280 MB no Linux); o Node
 ainda precisa estar instalado na máquina.
 
 O app abre o projeto git do diretório onde foi iniciado.
