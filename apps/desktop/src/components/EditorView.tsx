@@ -11,7 +11,7 @@ export default function EditorView(props: { root: string; version: number }) {
   const [cursor, setCursor] = createSignal({ line: 1, column: 1 });
   const [confirmClose, setConfirmClose] = createSignal<string | null>(null);
   const [showOutline, setShowOutline] = createSignal(true);
-  // Vista estreita (painel lateral aberto): a estrutura sai para o código ter largura.
+  // Área estreita (painel lateral aberto ou janela pequena): a estrutura sai para o código ter largura.
   const [narrow, setNarrow] = createSignal(false);
   const outlineVisible = () => showOutline() && !narrow() && !!active();
   let view!: HTMLDivElement;
@@ -117,7 +117,7 @@ export default function EditorView(props: { root: string; version: number }) {
           class="icon-btn"
           classList={{ active: outlineVisible() }}
           disabled={narrow()}
-          title={narrow() ? "Estrutura (feche o painel lateral para ver)" : "Estrutura do arquivo"}
+          title={narrow() ? "Estrutura (área estreita demais; feche o painel ou aumente a janela)" : "Estrutura do arquivo"}
           onClick={() => setShowOutline((v) => !v)}
         >
           <Icon name="panel" />

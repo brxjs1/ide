@@ -124,12 +124,13 @@ function Workspace(props: { initial: ProjectInfo }) {
     j: toggleTerminal,
   };
   const onShortcut = (e: KeyboardEvent) => {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.repeat || e.isComposing) return;
     // No terminal, Ctrl+B/N/P/K/J são do readline do shell (cursor, histórico, apagar linha).
     if (e.target instanceof Element && e.target.closest(".terminal-dock")) return;
+    const key = e.key.toLowerCase();
     // Dentro da paleta, Ctrl+N/P navegam na lista.
-    if (palette() && (e.key === "n" || e.key === "p")) return;
-    const action = SHORTCUTS[e.key.toLowerCase()];
+    if (palette() && (key === "n" || key === "p")) return;
+    const action = SHORTCUTS[key];
     if (!action) return;
     e.preventDefault();
     e.stopPropagation();

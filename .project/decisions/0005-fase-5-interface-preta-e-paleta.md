@@ -42,7 +42,8 @@ Pedido: um "preto moderno" e modernidade no layout todo, lendo o próprio T3 Cod
 
 - ✅ Visual coeso com a referência: preto profundo, hierarquia por bordas sutis, foco no
   conteúdo; Monaco e terminal no mesmo preto.
-- ✅ Tudo alcançável pelo teclado; abrir arquivo ou trocar de thread sem mouse.
+- ✅ Ações, threads e arquivos pela paleta, sem mouse; ao fechar sem executar, o foco
+  volta para onde estava.
 - ❌ `Ctrl+K` substitui os acordes `Ctrl+K …` do Monaco (comentar continua em `Ctrl+/`).
 - ❌ Só tema escuro (como antes). Um tema claro exigiria duplicar os tokens.
 - ❌ Sem Tailwind: os valores do T3 foram traduzidos à mão; mudanças futuras lá não chegam
