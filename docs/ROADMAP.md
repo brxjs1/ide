@@ -25,7 +25,7 @@ Tauri 2 (Rust)                         Sidecar Node (Claude Agent SDK)
 ├── Timeline (SQLite)
 └── MCP server  ──────────────────────► tools expostas ao agente
         │
-SolidJS UI: threads · editor Monaco · diff · terminal · timeline
+SolidJS UI: threads · editor Monaco · diff · terminal · timeline · paleta (Ctrl+K)
 ```
 
 ## Módulos
@@ -106,5 +106,6 @@ SolidJS UI: threads · editor Monaco · diff · terminal · timeline
 | 2 | Worktree por tarefa na UI, autonomia total em worktree, pipeline de revisão, sidecar no instalador | ✅ (Node embutido e sandbox de SO ficam para depois) |
 | 3 | Monaco, LSP, tree-sitter como tools MCP | ✅ editor com hover/definição/diagnósticos, `ide-mcp` para o agente (ADR 0004); autocompletar e rename depois |
 | 4 | Background agent, daily brief, debugger, embeddings | ✅ Sentinela, resumo do dia e orçamento; debugger e embeddings adiados (ADR 0003) |
+| 5 | Interface moderna: tema preto (referência T3 Code), layout inset, paleta de comandos e atalhos | ✅ (ADR 0005) |
 
 A Fase 0 existe para descobrir, usando no dia a dia, o que a Fase 1 realmente precisa ter.

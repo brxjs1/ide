@@ -71,7 +71,9 @@ Ferramentas do agente (ADR 0004)
 ## UI (apps/desktop/src)
 
 ```text
-App.tsx            Workspace: grid sidebar | main (topbar, avisos, thread, terminal) | painel
+App.tsx            Workspace: grid sidebar | main (topbar, avisos, thread, terminal) | painel;
+                   atalhos globais (Ctrl+K/P/N/B/J) e as ações da paleta
+styles.css         tokens do tema preto (ADR 0005); main e painel são cards `.surface`
 lib/agent.ts       store das conversas + sessão do SDK; `revision` reativa para persistir
 lib/threads.ts     threads por projeto no localStorage (sem apagar as de outros projetos)
 lib/tasks.ts       thread em worktree, revisão de tarefa e do working tree
@@ -79,8 +81,9 @@ lib/sentinel.ts    agente em background (ociosidade → revisão leve; respeita 
 lib/banners.ts     avisos no topo
 lib/editor.ts      abas abertas, salvar, markers e providers LSP do Monaco
 lib/monaco.ts      workers, tema e linguagens do Monaco
+lib/fuzzy.ts       busca aproximada da paleta de comandos
 components/        Sidebar, TopBar, ThreadView (+ SentinelView), Composer, ChatItem,
-                   EditorView, FilesPanel,
+                   EditorView, FilesPanel, CommandPalette (Ctrl+K / Ctrl+P),
                    RightPanel (DiffPanel, FilesPanel, TimelinePanel, TodayPanel), Banners, Terminal
 ```
 

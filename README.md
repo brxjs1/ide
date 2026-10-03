@@ -12,9 +12,16 @@ Visão completa e fases em [`docs/ROADMAP.md`](docs/ROADMAP.md).
 | | |
 |---|---|
 | ![Thread em worktree com revisão automática](docs/images/thread-worktree.png) | ![Sentinela e resumo do dia](docs/images/sentinela-hoje.png) |
-| ![Editor com diagnósticos do rust-analyzer](docs/images/editor.png) | ![Hover e outline no editor](docs/images/editor-hover.png) |
+| ![Editor com diagnósticos do rust-analyzer](docs/images/editor.png) | ![Hover com o erro do compilador](docs/images/editor-hover.png) |
+| ![Paleta de comandos (Ctrl+K) achando thread e arquivo](docs/images/paleta.png) | |
 
-Interface centrada em **threads** (estilo T3 Code, tema escuro):
+Interface centrada em **threads**, em **preto moderno** com a linguagem visual do T3 Code
+(Fase 5, ADR 0005): corpo e barra lateral em preto puro, a área principal como um card
+inset com textura sutil, superfícies flutuantes de vidro e estados por transparência.
+
+- **Paleta de comandos** (`Ctrl+K`): ações, threads e arquivos com busca aproximada;
+  `Ctrl+P` abre direto a busca de arquivos. Atalhos: `Ctrl+N` nova thread, `Ctrl+B` barra
+  lateral, `Ctrl+J` terminal, `Ctrl+S` salvar no editor.
 
 - **Uma lista de threads** para tudo: conversas no checkout atual e tarefas autônomas em
   worktree, com busca, idade, selos (trabalhando, aguarda você, veredito da revisão) e
