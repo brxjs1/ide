@@ -179,7 +179,7 @@ function Workspace(props: { initial: ProjectInfo }) {
         />
       </Show>
 
-      <main class="main">
+      <main class="main surface">
         <TopBar
           projectName={project().name}
           title={title()}

@@ -20,7 +20,7 @@ export default function RightPanel(props: {
   version: number;
 }) {
   return (
-    <aside class="right-panel">
+    <aside class="right-panel surface">
       <nav class="panel-tabs">
         <button classList={{ active: props.tab === "files" }} onClick={() => props.onTab("files")}>
           Arquivos

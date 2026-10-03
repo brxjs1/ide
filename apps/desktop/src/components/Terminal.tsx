@@ -6,7 +6,14 @@ import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import { ptyKill, ptyResize, ptySpawn, ptyWrite } from "../lib/ipc";
 
 // Mesmas cores do tema escuro do app (--term-bg, --fg, --accent).
-const THEME = { background: "#0e0e11", foreground: "#ececf0", cursor: "#3b82f6", selectionBackground: "#1d2a44" };
+// Preto do card principal; cursor e seleção azuis como no T3 Code.
+const THEME = {
+  background: "#0a0a0a",
+  foreground: "#e8e9ed",
+  cursor: "#b4cbff",
+  cursorAccent: "#0a0a0a",
+  selectionBackground: "rgba(180, 203, 255, 0.25)",
+};
 
 /** Espera da saída "assentar" antes de avisar atividade (um comando terminou, em geral). */
 const SETTLE_MS = 800;

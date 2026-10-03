@@ -57,22 +57,23 @@ export default function TopBar(props: {
         fallback={
           <Show when={!props.editor && props.changed > 0}>
             <button class="btn ghost-border" onClick={() => props.onReviewLocal()} title="Revisão antes do commit">
-              <Icon name="review" size={14} /> Revisar
+              <Icon name="review" size={14} /> <span class="btn-label">Revisar</span>
               <span class="btn-count">{props.changed}</span>
             </button>
           </Show>
         }
       >
-        <button class="btn ghost-border" disabled={busy()} onClick={() => props.onReviewTask()}>
-          <Icon name="review" size={14} /> Revisar
+        <button class="btn ghost-border" disabled={busy()} onClick={() => props.onReviewTask()} title="Revisar a tarefa">
+          <Icon name="review" size={14} /> <span class="btn-label">Revisar</span>
         </button>
         <button class="btn ghost-border" disabled={busy()} onClick={() => props.onMerge()} title="Merge no branch atual">
-          <Icon name="merge" size={14} /> Integrar
+          <Icon name="merge" size={14} /> <span class="btn-label">Integrar</span>
         </button>
         <button
           class="btn ghost-border"
           classList={{ danger: confirm() }}
           disabled={busy()}
+          title="Descartar o worktree"
           onClick={() => {
             if (!confirm()) {
               setConfirm(true);
@@ -83,7 +84,10 @@ export default function TopBar(props: {
             props.onDiscard();
           }}
         >
-          <Icon name="trash" size={14} /> {confirm() ? "Confirmar descarte" : "Descartar"}
+          <Icon name="trash" size={14} />{" "}
+          <span class="btn-label" classList={{ keep: confirm() }}>
+            {confirm() ? "Confirmar descarte" : "Descartar"}
+          </span>
         </button>
       </Show>
 

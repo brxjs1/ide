@@ -11,6 +11,10 @@ export default function EditorView(props: { root: string; version: number }) {
   const [cursor, setCursor] = createSignal({ line: 1, column: 1 });
   const [confirmClose, setConfirmClose] = createSignal<string | null>(null);
   const [showOutline, setShowOutline] = createSignal(true);
+  // Vista estreita (painel lateral aberto): a estrutura sai para o código ter largura.
+  const [narrow, setNarrow] = createSignal(false);
+  const outlineVisible = () => showOutline() && !narrow() && !!active();
+  let view!: HTMLDivElement;
   const active = () => editorState.files.find((f) => f.path === editorState.active) ?? null;
 
   const [outline] = createResource(
@@ -36,6 +40,9 @@ export default function EditorView(props: { root: string; version: number }) {
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => void save());
     editor.onDidChangeCursorPosition((e) => setCursor({ line: e.position.lineNumber, column: e.position.column }));
+    const observer = new ResizeObserver(([entry]) => setNarrow((entry?.contentRect.width ?? 0) < 720));
+    observer.observe(view);
+    onCleanup(() => observer.disconnect());
   });
   onCleanup(() => editor?.dispose());
 
@@ -75,7 +82,7 @@ export default function EditorView(props: { root: string; version: number }) {
   };
 
   return (
-    <div class="editor-view">
+    <div class="editor-view" ref={view}>
       <div class="editor-tabs">
         <For each={editorState.files}>
           {(file) => (
@@ -108,15 +115,16 @@ export default function EditorView(props: { root: string; version: number }) {
         <span class="grow" />
         <button
           class="icon-btn"
-          classList={{ active: showOutline() }}
-          title="Estrutura do arquivo"
+          classList={{ active: outlineVisible() }}
+          disabled={narrow()}
+          title={narrow() ? "Estrutura (feche o painel lateral para ver)" : "Estrutura do arquivo"}
           onClick={() => setShowOutline((v) => !v)}
         >
           <Icon name="panel" />
         </button>
       </div>
 
-      <div class="editor-body" classList={{ "with-outline": showOutline() && !!active() }}>
+      <div class="editor-body" classList={{ "with-outline": outlineVisible() }}>
         <div class="editor-host" ref={host} />
         <Show when={!active()}>
           <div class="editor-empty">
@@ -124,7 +132,7 @@ export default function EditorView(props: { root: string; version: number }) {
             <p>Abra um arquivo pela aba Arquivos do painel lateral, ou clicando num caminho no chat.</p>
           </div>
         </Show>
-        <Show when={showOutline() && active()}>
+        <Show when={outlineVisible()}>
           <aside class="outline">
             <h4>Estrutura</h4>
             <Show when={outline()?.length} fallback={<p class="hint">Sem símbolos (tree-sitter).</p>}>

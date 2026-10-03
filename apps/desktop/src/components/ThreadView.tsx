@@ -166,7 +166,7 @@ function ReviewSection(props: { slug: string }) {
         <header class="review-head">
           <Icon name="review" />
           <span>Revisão automática</span>
-          <span class="muted small">contexto limpo · roda testes · não edita</span>
+          <span class="muted small ellipsis review-sub">contexto limpo · roda testes · não edita</span>
           <span class="grow" />
           <Show when={isRunning(id())}>
             <span class="spinner" />
