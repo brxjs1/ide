@@ -146,6 +146,8 @@ export interface LspDiagnostic {
   severity: number;
   message: string;
   source: string | null;
+  /** Código do erro no servidor: "2322" (TypeScript), "E0308" (Rust)... */
+  code: string | null;
 }
 
 export interface LspTarget {
@@ -169,3 +171,63 @@ export const lspHover = (root: string, path: string, line: number, character: nu
   invoke<string | null>("lsp_hover", { root, path, line, character });
 export const lspDefinition = (root: string, path: string, line: number, character: number) =>
   invoke<LspTarget[]>("lsp_definition", { root, path, line, character });
+
+// Qualidade de código (crates/lint) — espelha ide_lint::{Issue, Rule, ProjectReport}.
+export type IssueKind = "bug" | "vulnerability" | "security-hotspot" | "code-smell";
+export type IssueSeverity = "info" | "minor" | "major" | "critical" | "blocker";
+
+export interface CodeSpan {
+  line: number;
+  column: number;
+  endLine: number;
+  endColumn: number;
+}
+
+export interface CodeFix {
+  title: string;
+  edits: (CodeSpan & { text: string })[];
+}
+
+export interface CodeIssue extends CodeSpan {
+  rule: string;
+  message: string;
+  kind: IssueKind;
+  severity: IssueSeverity;
+  fix: CodeFix | null;
+  /** Dá para ignorar com um comentário na linha anterior (não está dentro de string ou JSX). */
+  suppressible: boolean;
+}
+
+export interface LintRule {
+  key: string;
+  name: string;
+  kind: IssueKind;
+  severity: IssueSeverity;
+  scope: "js" | "ts" | "any";
+  debtMinutes: number;
+  tags: string[];
+  why: string;
+  fix: string;
+  noncompliant: string;
+  compliant: string;
+}
+
+export interface Ratings {
+  maintainability: string;
+  reliability: string;
+  security: string;
+  debtMinutes: number;
+}
+
+export interface ProjectReport {
+  files: { path: string; lines: number; issues: CodeIssue[] }[];
+  filesAnalyzed: number;
+  lines: number;
+  ratings: Ratings;
+  truncated: boolean;
+}
+
+export const lintSource = (root: string, path: string, text: string) =>
+  invoke<CodeIssue[]>("lint_source", { root, path, text });
+export const lintProject = (root: string) => invoke<ProjectReport>("lint_project", { root });
+export const lintRules = () => invoke<LintRule[]>("lint_rules");

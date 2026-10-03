@@ -9,7 +9,7 @@ import Sidebar, { type Selection } from "./components/Sidebar";
 import Terminal from "./components/Terminal";
 import ThreadView, { SentinelView } from "./components/ThreadView";
 import TopBar from "./components/TopBar";
-import { onAgentDone, onAgentError } from "./lib/agent";
+import { onAgentDone, onAgentError, sendPrompt } from "./lib/agent";
 import { dismissTitle, notify } from "./lib/banners";
 import * as editor from "./lib/editor";
 import {
@@ -23,6 +23,7 @@ import {
   taskList,
   taskMerge,
 } from "./lib/ipc";
+import { analyzeProject, lens, onShowProblems, setLens } from "./lib/quality";
 import * as sentinel from "./lib/sentinel";
 import { reviewTask, reviewWorkingTree, setRoot } from "./lib/tasks";
 import { adoptTasks, age, createThread, load, threadById, threads, updateThread } from "./lib/threads";
@@ -71,6 +72,7 @@ function Workspace(props: { initial: ProjectInfo }) {
     setRoot(root);
     editor.init(root);
     editor.onOpenRequest(() => setSelection({ kind: "editor" }));
+    onShowProblems(() => setPanel("problems"));
     load(root);
     const saved = await settingsGet("composer").catch(() => null);
     if (saved) {
@@ -196,6 +198,31 @@ function Workspace(props: { initial: ProjectInfo }) {
       { id: "files", group: "Ações", label: "Abrir arquivo…", icon: "file", keys: ["Ctrl", "P"], run: () => queueMicrotask(() => setPalette("files")) },
       { id: "editor", group: "Ações", label: "Ir para o editor", icon: "code", run: () => setSelection({ kind: "editor" }) },
       { id: "sentinel", group: "Ações", label: "Ir para a Sentinela", icon: "eye", run: () => setSelection({ kind: "sentinel" }) },
+      { id: "p-problems", group: "Ações", label: "Painel: Problemas de código", icon: "bug", run: () => togglePanel("problems") },
+      {
+        id: "analyze",
+        group: "Ações",
+        label: "Analisar a qualidade do projeto",
+        icon: "shield",
+        run: () => {
+          setPanel("problems");
+          void analyzeProject(root);
+        },
+      },
+      {
+        id: "lens",
+        group: "Ações",
+        label: lens().enabled ? "Error Lens: desligar" : "Error Lens: ligar",
+        icon: "eye",
+        run: () => setLens({ enabled: !lens().enabled }),
+      },
+      {
+        id: "lens-level",
+        group: "Ações",
+        label: `Error Lens: mostrar ${lens().level === "all" ? "só erros e avisos" : lens().level === "warnings" ? "só erros" : "tudo"}`,
+        icon: "eye",
+        run: () => setLens({ level: lens().level === "all" ? "warnings" : lens().level === "warnings" ? "errors" : "all" }),
+      },
       { id: "review", group: "Ações", label: "Revisar alterações do checkout", icon: "review", run: () => void reviewLocal() },
       { id: "terminal", group: "Ações", label: terminalOpen() ? "Esconder terminal" : "Mostrar terminal", icon: "terminal", keys: ["Ctrl", "J"], run: toggleTerminal },
       { id: "sidebar", group: "Ações", label: sidebarHidden() ? "Mostrar barra lateral" : "Esconder barra lateral", icon: "sidebar", keys: ["Ctrl", "B"], run: () => setSidebarHidden((v) => !v) },
@@ -220,6 +247,20 @@ function Workspace(props: { initial: ProjectInfo }) {
         run: () => setSelection({ kind: "thread", id: t.id }),
       })),
     ];
+  };
+
+  /** "Pedir ao agente" a partir de um problema: thread nova no checkout, com aprovação. */
+  const askAgent = (prompt: string, threadTitle: string) => {
+    const created = createThread({
+      project: root,
+      location: { kind: "local" },
+      title: threadTitle,
+      model: draft().model,
+      effort: draft().effort,
+      mode: "assisted",
+    });
+    setSelection({ kind: "thread", id: created.id });
+    void sendPrompt(created.conversation, prompt, root, "assisted", { model: draft().model, effort: draft().effort });
   };
 
   const title = () => {
@@ -310,6 +351,7 @@ function Workspace(props: { initial: ProjectInfo }) {
             files={files()}
             thread={thread()}
             version={version()}
+            onAskAgent={askAgent}
           />
         )}
       </Show>

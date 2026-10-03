@@ -3,6 +3,7 @@ import { For, Show, createEffect, createResource, createSignal, on, onCleanup, o
 import { closeFile, editorState, modelFor, save, setActive, takeReveal } from "../lib/editor";
 import { fileOutline } from "../lib/ipc";
 import { monaco } from "../lib/monaco";
+import { lens, liveIssues, requestProblems, setLens } from "../lib/quality";
 import Icon from "./Icons";
 
 export default function EditorView(props: { root: string; version: number }) {
@@ -182,9 +183,37 @@ export default function EditorView(props: { root: string; version: number }) {
             >
               LSP
             </span>
-            <span class="diag-count" classList={{ bad: file().errors > 0 }}>
+            <button
+              class="status-btn diag-count"
+              classList={{ bad: file().errors > 0 }}
+              onClick={() => requestProblems()}
+              aria-label="Erros e avisos do compilador"
+              data-tip="Erros e avisos do compilador"
+              data-tip-pos="top"
+            >
               <Icon name="x" size={11} /> {file().errors} <Icon name="info" size={11} /> {file().warnings}
-            </span>
+            </button>
+            <button
+              class="status-btn quality-count"
+              classList={{ some: (liveIssues[file().path]?.length ?? 0) > 0 }}
+              onClick={() => requestProblems()}
+              aria-label="Problemas de qualidade neste arquivo"
+              data-tip="Qualidade (regras estilo SonarLint)"
+              data-tip-pos="top"
+            >
+              <Icon name="shield" size={11} /> {liveIssues[file().path]?.length ?? 0}
+            </button>
+            <button
+              class="status-btn lens-toggle"
+              classList={{ on: lens().enabled }}
+              onClick={() => setLens({ enabled: !lens().enabled })}
+              aria-pressed={lens().enabled}
+              data-tip={lens().enabled ? "Error Lens ligado" : "Error Lens desligado"}
+              data-tip-pos="top"
+              data-tip-align="end"
+            >
+              <Icon name="eye" size={11} /> Lens
+            </button>
           </footer>
         )}
       </Show>

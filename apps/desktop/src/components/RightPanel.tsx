@@ -5,10 +5,11 @@ import type { Thread } from "../lib/threads";
 import DiffPanel from "./DiffPanel";
 import FilesPanel from "./FilesPanel";
 import Icon from "./Icons";
+import ProblemsPanel, { problemCount } from "./ProblemsPanel";
 import TimelinePanel from "./TimelinePanel";
 import TodayPanel from "./TodayPanel";
 
-export type PanelTab = "files" | "diff" | "timeline" | "today";
+export type PanelTab = "files" | "diff" | "problems" | "timeline" | "today";
 
 export default function RightPanel(props: {
   tab: PanelTab;
@@ -18,10 +19,13 @@ export default function RightPanel(props: {
   files: ChangedFile[];
   thread: Thread | null;
   version: number;
+  onAskAgent: (prompt: string, title: string) => void;
 }) {
   return (
     <aside class="right-panel surface">
       <nav class="panel-tabs">
+        {/* Só as abas rolam; o botão de fechar fica sempre visível. */}
+        <div class="panel-tab-list" role="tablist">
         <button classList={{ active: props.tab === "files" }} onClick={() => props.onTab("files")}>
           Arquivos
         </button>
@@ -29,14 +33,18 @@ export default function RightPanel(props: {
           Alterações
           <span class="count">{props.files.length || ""}</span>
         </button>
+        <button classList={{ active: props.tab === "problems" }} onClick={() => props.onTab("problems")}>
+          Problemas
+          <span class="count">{problemCount() || ""}</span>
+        </button>
         <button classList={{ active: props.tab === "timeline" }} onClick={() => props.onTab("timeline")}>
           Timeline
         </button>
         <button classList={{ active: props.tab === "today" }} onClick={() => props.onTab("today")}>
           Hoje
         </button>
-        <span class="grow" />
-        <button class="icon-btn" onClick={() => props.onClose()} title="Fechar painel">
+        </div>
+        <button class="icon-btn" onClick={() => props.onClose()} aria-label="Fechar painel" data-tip="Fechar" data-tip-align="end">
           <Icon name="x" size={14} />
         </button>
       </nav>
@@ -47,6 +55,9 @@ export default function RightPanel(props: {
           </Match>
           <Match when={props.tab === "diff"}>
             <DiffPanel root={props.root} files={props.files} thread={props.thread} version={props.version} />
+          </Match>
+          <Match when={props.tab === "problems"}>
+            <ProblemsPanel root={props.root} version={props.version} onAskAgent={props.onAskAgent} />
           </Match>
           <Match when={props.tab === "timeline"}>
             <TimelinePanel project={props.root} />

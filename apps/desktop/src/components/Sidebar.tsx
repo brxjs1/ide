@@ -8,7 +8,11 @@ import { reviewConversation } from "../lib/tasks";
 import { type Thread, age } from "../lib/threads";
 import Icon, { Logo } from "./Icons";
 
-export type Selection = { kind: "new" } | { kind: "thread"; id: string } | { kind: "sentinel" } | { kind: "editor" };
+export type Selection =
+  | { kind: "new" }
+  | { kind: "thread"; id: string }
+  | { kind: "sentinel" }
+  | { kind: "editor" };
 
 const SETTLED_PAGE = 10;
 
@@ -17,7 +21,7 @@ export default function Sidebar(props: {
   threads: Thread[];
   selection: Selection;
   onSelect: (selection: Selection) => void;
-  onPanel: (tab: "files" | "diff" | "timeline" | "today") => void;
+  onPanel: (tab: "files" | "diff" | "problems" | "timeline" | "today") => void;
   onPalette: () => void;
   onRefresh: () => void;
   onCollapse: () => void;
@@ -165,20 +169,23 @@ export default function Sidebar(props: {
       </div>
 
       <footer class="sidebar-foot">
-        <button class="icon-btn" title="Hoje e configurações" onClick={() => props.onPanel("today")}>
+        <button class="icon-btn" aria-label="Hoje e configurações" data-tip="Hoje e configurações" data-tip-pos="top" data-tip-align="start" onClick={() => props.onPanel("today")}>
           <Icon name="settings" />
         </button>
-        <button class="icon-btn" title="Arquivos" onClick={() => props.onPanel("files")}>
+        <button class="icon-btn" aria-label="Arquivos" data-tip="Arquivos" data-tip-pos="top" onClick={() => props.onPanel("files")}>
           <Icon name="file" />
         </button>
-        <button class="icon-btn" title="Alterações (diff)" onClick={() => props.onPanel("diff")}>
+        <button class="icon-btn" aria-label="Alterações" data-tip="Alterações (diff)" data-tip-pos="top" onClick={() => props.onPanel("diff")}>
           <Icon name="branch" />
         </button>
-        <button class="icon-btn" title="Timeline" onClick={() => props.onPanel("timeline")}>
+        <button class="icon-btn" aria-label="Problemas" data-tip="Problemas de código" data-tip-pos="top" onClick={() => props.onPanel("problems")}>
+          <Icon name="bug" />
+        </button>
+        <button class="icon-btn" aria-label="Timeline" data-tip="Timeline" data-tip-pos="top" onClick={() => props.onPanel("timeline")}>
           <Icon name="chart" />
         </button>
         <span class="grow" />
-        <button class="icon-btn" title="Atualizar estado do git" onClick={() => props.onRefresh()}>
+        <button class="icon-btn" aria-label="Atualizar estado do git" data-tip="Atualizar" data-tip-pos="top" data-tip-align="end" onClick={() => props.onRefresh()}>
           <Icon name="refresh" />
         </button>
       </footer>

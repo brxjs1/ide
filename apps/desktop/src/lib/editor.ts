@@ -1,10 +1,13 @@
 // Arquivos abertos no editor: modelos do Monaco, salvar, sincronizar com o LSP,
-// diagnósticos como marcadores e navegação (ir para definição entre arquivos).
+// diagnósticos como marcadores e navegação (ir para definição entre arquivos), mais a
+// análise de qualidade ao vivo (crates/lint), o Error Lens e as explicações de erros.
 import { listen } from "@tauri-apps/api/event";
-import { createStore } from "solid-js/store";
+import { createStore, reconcile } from "solid-js/store";
 
 import { notify } from "./banners";
+import { explain } from "./explain";
 import {
+  type CodeIssue,
   type LspDiagnostic,
   fileRead,
   fileWrite,
@@ -15,8 +18,10 @@ import {
   lspHover,
   lspOpen,
   lspSave,
+  lintSource,
 } from "./ipc";
 import { LSP_LANGUAGES, languageFor, monaco, setupMonaco } from "./monaco";
+import { KIND_LABEL, SEVERITY_LABEL, lens, loadRules, ruleFor, setLiveIssues, watchLens } from "./quality";
 
 export interface OpenFile {
   path: string;
@@ -46,6 +51,18 @@ const previews = new Map<string, monaco.editor.ITextModel>();
 const diagnosticsByPath = new Map<string, LspDiagnostic[]>();
 /** Servidores ausentes já avisados (um aviso por comando). */
 const warnedMissing = new Set<string>();
+const lintTimers = new Map<string, ReturnType<typeof setTimeout>>();
+/**
+ * Problemas de qualidade por arquivo aberto, com a versão do texto analisado: as
+ * posições (e as correções) só valem para essa versão.
+ */
+const issuesByPath = new Map<string, { version: number; issues: CodeIssue[] }>();
+/** Decorações do Error Lens por modelo. */
+const lensDecorations = new Map<string, monaco.editor.IEditorDecorationsCollection | string[]>();
+
+// Diagnósticos do compilador por arquivo (inclusive fechados), para o painel Problemas.
+const [compiler, setCompiler] = createStore<Record<string, LspDiagnostic[]>>({});
+export const compilerDiagnostics = compiler;
 
 type Reveal = { line: number; column: number };
 let openListener: () => void = () => {};
@@ -77,6 +94,7 @@ export function init(projectRoot: string) {
   root = projectRoot;
   setupMonaco();
   registerProviders();
+  void loadRules();
 }
 
 /** Abre (ou foca) um arquivo, opcionalmente posicionando o cursor (linha/coluna a partir de 1). */
@@ -117,8 +135,54 @@ async function load(path: string) {
   model.onDidChangeContent(() => {
     patch(path, { dirty: model.getValue() !== saved.get(path) });
     scheduleLspChange(path);
+    scheduleLint(path);
   });
   void startLsp(path, language, text);
+  scheduleLint(path, 0);
+}
+
+/** Análise de qualidade do texto atual (sem esperar salvar), com debounce. */
+function scheduleLint(path: string, delay = 400) {
+  clearTimeout(lintTimers.get(path));
+  lintTimers.set(
+    path,
+    setTimeout(async () => {
+      const model = models.get(path);
+      if (!model) return;
+      const version = model.getVersionId();
+      const issues = await lintSource(root, path, model.getValue()).catch(() => null);
+      // Texto mudou ou a aba fechou durante a análise: a próxima rodada cuida.
+      if (models.get(path) !== model || model.getVersionId() !== version) return;
+      if (!issues) {
+        // Análise falhou: marcadores velhos apontariam para o lugar errado.
+        issuesByPath.delete(path);
+        setLiveIssues(path, undefined);
+        monaco.editor.setModelMarkers(model, "ide-lint", []);
+        return;
+      }
+      issuesByPath.set(path, { version, issues });
+      setLiveIssues(path, issues);
+      monaco.editor.setModelMarkers(model, "ide-lint", issues.map(issueMarker));
+    }, delay),
+  );
+}
+
+/** Severidade no editor: o compilador fica com o vermelho; qualidade é aviso ou informação. */
+function issueMarker(issue: CodeIssue): monaco.editor.IMarkerData {
+  const severity =
+    issue.severity === "info" || issue.severity === "minor"
+      ? monaco.MarkerSeverity.Info
+      : monaco.MarkerSeverity.Warning;
+  return {
+    startLineNumber: issue.line,
+    startColumn: issue.column,
+    endLineNumber: issue.endLine,
+    endColumn: issue.endColumn,
+    severity,
+    message: issue.message,
+    source: "ide-lint",
+    code: issue.rule,
+  };
 }
 
 async function startLsp(path: string, language: string, text: string) {
@@ -194,8 +258,13 @@ async function syncSaved(path: string, text: string) {
 
 export function closeFile(path: string) {
   const model = models.get(path);
+  if (model) lensDecorations.delete(model.uri.toString());
   model?.dispose();
   models.delete(path);
+  clearTimeout(lintTimers.get(path));
+  lintTimers.delete(path);
+  issuesByPath.delete(path);
+  setLiveIssues(path, undefined);
   saved.delete(path);
   versions.delete(path);
   clearTimeout(lspTimers.get(path));
@@ -258,6 +327,7 @@ const SEVERITY: Record<number, monaco.MarkerSeverity> = {
 
 function applyDiagnostics(path: string, diagnostics: LspDiagnostic[]) {
   diagnosticsByPath.set(path, diagnostics);
+  setCompiler(path, reconcile(diagnostics));
   const model = models.get(path);
   if (!model) return;
   monaco.editor.setModelMarkers(
@@ -271,6 +341,7 @@ function applyDiagnostics(path: string, diagnostics: LspDiagnostic[]) {
       severity: SEVERITY[d.severity] ?? monaco.MarkerSeverity.Info,
       message: d.message,
       source: d.source ?? undefined,
+      code: d.code ?? undefined,
     })),
   );
   patch(path, {
@@ -330,6 +401,86 @@ function registerProviders() {
     });
   }
 
+  // Explicação dos erros do compilador e detalhe das regras de qualidade, no hover.
+  monaco.languages.registerHoverProvider("*", {
+    provideHover: (model, position) => {
+      const markers = monaco.editor
+        .getModelMarkers({ resource: model.uri })
+        .filter(
+          (m) =>
+            (m.owner === "lsp" || m.owner === "ide-lint") &&
+            monaco.Range.containsPosition(
+              { startLineNumber: m.startLineNumber, startColumn: m.startColumn, endLineNumber: m.endLineNumber, endColumn: m.endColumn },
+              position,
+            ),
+        );
+      const contents = markers.flatMap((m) => markerDetail(m));
+      return contents.length ? { contents } : null;
+    },
+  });
+
+  // Correções automáticas das regras de qualidade, e ignorar a regra na linha.
+  monaco.languages.registerCodeActionProvider("*", {
+    provideCodeActions: (model, _range, context) => {
+      const path = pathOf(model.uri);
+      if (!path) return { actions: [], dispose: () => {} };
+      const actions: monaco.languages.CodeAction[] = [];
+      // Texto editado depois da análise: as posições estão velhas até a próxima rodada.
+      const analyzed = issuesByPath.get(path);
+      if (!analyzed || analyzed.version !== model.getVersionId()) return { actions, dispose: () => {} };
+      for (const marker of context.markers.filter((m) => m.source === "ide-lint")) {
+        const rule = typeof marker.code === "string" ? marker.code : marker.code?.value;
+        const issue = analyzed.issues.find((i) => i.rule === rule && i.line === marker.startLineNumber && i.column === marker.startColumn);
+        if (!issue || !rule) continue;
+        if (issue.fix) {
+          actions.push({
+            title: issue.fix.title,
+            kind: "quickfix",
+            diagnostics: [marker],
+            isPreferred: true,
+            edit: {
+              edits: issue.fix.edits.map((e) => ({
+                resource: model.uri,
+                versionId: analyzed.version,
+                textEdit: {
+                  range: new monaco.Range(e.line, e.column, e.endLine, e.endColumn),
+                  text: e.text,
+                },
+              })),
+            },
+          });
+        }
+        // Linha dentro de template, string ou JSX: o comentário viraria conteúdo.
+        if (!issue.suppressible) continue;
+        const line = model.getLineContent(issue.line);
+        const indent = /^\s*/.exec(line)?.[0] ?? "";
+        const comment = model.getLanguageId() === "python" ? "#" : "//";
+        actions.push({
+          title: `Ignorar ${rule} nesta linha`,
+          kind: "quickfix",
+          diagnostics: [marker],
+          edit: {
+            edits: [
+              {
+                resource: model.uri,
+                versionId: analyzed.version,
+                textEdit: {
+                  range: new monaco.Range(issue.line, 1, issue.line, 1),
+                  text: `${indent}${comment} ide-lint-disable-next-line ${rule}\n`,
+                },
+              },
+            ],
+          },
+        });
+      }
+      return { actions, dispose: () => {} };
+    },
+  });
+
+  // Error Lens: redesenha quando os marcadores ou as preferências mudam.
+  monaco.editor.onDidChangeMarkers((uris) => uris.forEach(refreshLens));
+  watchLens(() => monaco.editor.getModels().forEach((m) => refreshLens(m.uri)));
+
   // "Ir para definição" em outro arquivo abre uma aba nossa.
   monaco.editor.registerEditorOpener({
     openCodeEditor: (_source, resource, selection) => {
@@ -345,4 +496,97 @@ function registerProviders() {
       return true;
     },
   });
+}
+
+/** Markdown do hover para um marcador: explicação do erro ou a regra de qualidade. */
+function markerDetail(marker: monaco.editor.IMarker): monaco.IMarkdownString[] {
+  const code = typeof marker.code === "string" ? marker.code : marker.code?.value;
+  if (marker.owner === "ide-lint" && code) {
+    const rule = ruleFor(code);
+    if (!rule) return [];
+    return [
+      {
+        value: [
+          `**${rule.key} · ${rule.name}**`,
+          `_${KIND_LABEL[rule.kind]} · ${SEVERITY_LABEL[rule.severity]} · ~${rule.debtMinutes} min_`,
+          rule.why,
+          `**Como corrigir:** ${rule.fix}`,
+        ].join("\n\n"),
+      },
+    ];
+  }
+  const explanation = explain({ code, message: marker.message, source: marker.source });
+  if (!explanation) return [];
+  return [
+    {
+      value: [
+        `**${explanation.code} · ${explanation.title}**`,
+        explanation.summary,
+        `_Por quê:_ ${explanation.why}`,
+        `**Como resolver:**\n${explanation.fixes.map((f) => `- ${f}`).join("\n")}`,
+      ].join("\n\n"),
+    },
+  ];
+}
+
+const LENS_CLASS: Record<number, string> = {
+  [monaco.MarkerSeverity.Error]: "error",
+  [monaco.MarkerSeverity.Warning]: "warning",
+  [monaco.MarkerSeverity.Info]: "info",
+  [monaco.MarkerSeverity.Hint]: "info",
+};
+const LENS_ICON: Record<string, string> = { error: "✖", warning: "▲", info: "●" };
+
+/** Texto curto do Error Lens: para erros conhecidos, a explicação em português. */
+function lensText(marker: monaco.editor.IMarker): string {
+  const code = typeof marker.code === "string" ? marker.code : marker.code?.value;
+  const friendly = marker.owner === "lsp" ? explain({ code, message: marker.message, source: marker.source })?.title : null;
+  // Sem crases: no fim da linha não há markdown para formatá-las.
+  const text = (friendly ?? marker.message).split("\n")[0]!.replaceAll("`", "").trim();
+  return text.length > 140 ? `${text.slice(0, 139)}…` : text;
+}
+
+function refreshLens(uri: monaco.Uri) {
+  const model = monaco.editor.getModel(uri);
+  if (!model || !pathOf(uri) || ![...models.values()].includes(model)) return;
+  const { enabled, level } = lens();
+  const minimum =
+    level === "errors" ? monaco.MarkerSeverity.Error : level === "warnings" ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Info;
+  const markers = enabled
+    ? monaco.editor
+        .getModelMarkers({ resource: uri })
+        .filter((m) => (m.owner === "lsp" || m.owner === "ide-lint") && m.severity >= minimum)
+    : [];
+  // Uma mensagem por linha: a mais grave (o compilador ganha do analisador no empate).
+  const byLine = new Map<number, monaco.editor.IMarker[]>();
+  for (const m of markers) byLine.set(m.startLineNumber, [...(byLine.get(m.startLineNumber) ?? []), m]);
+  const decorations: monaco.editor.IModelDeltaDecoration[] = [];
+  for (const [line, list] of byLine) {
+    if (line > model.getLineCount()) continue;
+    list.sort((a, b) => b.severity - a.severity || (a.owner === "lsp" ? -1 : 1));
+    const top = list[0]!;
+    const kind = LENS_CLASS[top.severity] ?? "info";
+    const more = list.length > 1 ? `  (+${list.length - 1})` : "";
+    const end = model.getLineMaxColumn(line);
+    decorations.push({
+      range: new monaco.Range(line, 1, line, 1),
+      options: { isWholeLine: true, className: `lens-line lens-line-${kind}`, stickiness: 1 },
+    });
+    // O texto vai depois do fim do intervalo. Precisa ser a linha inteira: com intervalo
+    // vazio no fim da linha o Monaco descarta o texto injetado.
+    decorations.push({
+      range: new monaco.Range(line, 1, line, end),
+      options: {
+        after: {
+          content: `    ${LENS_ICON[kind]} ${lensText(top)}${more}`,
+          inlineClassName: `lens-text lens-${kind}`,
+          cursorStops: monaco.editor.InjectedTextCursorStops.None,
+        },
+        stickiness: 1,
+      },
+    });
+  }
+  const key = uri.toString();
+  const previous = lensDecorations.get(key);
+  lensDecorations.set(key, model.deltaDecorations(Array.isArray(previous) ? previous : [], decorations));
 }
