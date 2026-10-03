@@ -13,12 +13,29 @@ Visão completa e fases em [`docs/ROADMAP.md`](docs/ROADMAP.md).
 |---|---|
 | ![Thread em worktree com revisão automática](docs/images/thread-worktree.png) | ![Sentinela e resumo do dia](docs/images/sentinela-hoje.png) |
 | ![Editor com diagnósticos do rust-analyzer](docs/images/editor.png) | ![Hover com o erro do compilador](docs/images/editor-hover.png) |
-| ![Paleta de comandos (Ctrl+K) achando thread e arquivo](docs/images/paleta.png) | |
+| ![Paleta de comandos (Ctrl+K) achando thread e arquivo](docs/images/paleta.png) | ![Quadro de tarefas: a fazer, em progresso, concluídas](docs/images/quadro.png) |
+| ![Error Lens com os erros do TypeScript em português](docs/images/error-lens.png) | ![Explicação do erro TS2322 no hover](docs/images/explicacao-ts.png) |
+| ![Painel Problemas com notas A–E e a regra explicada](docs/images/problemas.png) | |
 
 Interface centrada em **threads**, em **preto moderno** com a linguagem visual do T3 Code
 (Fase 5, ADR 0005): corpo e barra lateral em preto puro, a área principal como um card
 inset com textura sutil, superfícies flutuantes de vidro e estados por transparência.
 
+- **Qualidade de código** (Fase 6, ADR 0006), com o SonarLint como referência:
+  - **regras para JS/TS** (bugs, vulnerabilidades, pontos de segurança e code smells),
+    com tipo, severidade, "por que é um problema", "como corrigir" e exemplos;
+  - **análise ao vivo**, enquanto você digita;
+  - **correções automáticas** (`Ctrl+.`) e "ignorar nesta linha";
+  - **painel Problemas** com notas A–E e dívida técnica.
+- **Error Lens próprio**: a mensagem aparece no fim da linha, colorida pela severidade.
+  Os erros do TypeScript vêm traduzidos pelo **gerador de explicações**, que cobre 49
+  erros do TS e 13 do Rust e diz o que aconteceu, por que e como resolver
+  (também no hover).
+- **Quadro de tarefas**: a fazer, em progresso e concluídas, em `.project/tasks/*.md`,
+  com prioridade e progresso do checklist.
+  - Arraste os cartões, ou use as setas.
+  - **Executar com o agente** abre a tarefa num worktree. Integrar conclui a tarefa.
+  - O agente lê o quadro pela ferramenta `task_board`.
 - **Paleta de comandos** (`Ctrl+K`): ações, threads e arquivos com busca aproximada;
   `Ctrl+P` abre direto a busca de arquivos. Atalhos: `Ctrl+N` nova thread, `Ctrl+B` barra
   lateral, `Ctrl+J` terminal, `Ctrl+S` salvar no editor.
@@ -40,7 +57,8 @@ inset com textura sutil, superfícies flutuantes de vidro e estados por transpar
   a definição (inclusive em outro arquivo); Ctrl+S salva e o servidor verifica de novo. Usa
   rust-analyzer, typescript-language-server, pyright ou gopls do PATH.
 - **Ferramentas para o agente** (Fase 3): o binário `ide-mcp` expõe via MCP
-  `outline_file`, `find_symbol`, `project_tree`, `diagnostics` e `definition` — o agente
+  `outline_file`, `find_symbol`, `project_tree`, `code_issues`, `task_board`, `diagnostics` e
+  `definition` — o agente
   vê a estrutura e os erros reais sem ler arquivos inteiros nem rodar o build. As de
   servidor de linguagem pedem aprovação (ele executa código do projeto, ver ADR 0004).
 - **Painel lateral** com Alterações (diff), Arquivos, Timeline e Hoje; **terminal** recolhível que
@@ -62,6 +80,7 @@ apps/desktop/        @ide/desktop — UI Solid + src-tauri (comandos finos)
 crates/core/         ide-core — git: projeto, worktrees, diff, arquivos
 crates/syntax/       ide-syntax — tree-sitter: outline e símbolos
 crates/lsp/          ide-lsp — cliente LSP e servidores por linguagem
+crates/lint/         ide-lint — qualidade de código (regras estilo SonarLint, notas A–E)
 crates/mcp/          ide-mcp — servidor MCP com as ferramentas do agente
 crates/pty/          ide-pty — terminais
 crates/timeline/     ide-timeline — eventos em SQLite

@@ -11,9 +11,11 @@ ide/
 │       │   └── lib/ipc.ts  # wrappers tipados dos comandos Tauri
 │       └── src-tauri/      # crate ide-desktop: só comandos finos, sem lógica
 ├── crates/
-│   ├── core/               # ide-core — git: projeto, worktrees, diff; arquivos (files.rs)
+│   ├── core/               # ide-core — git: projeto, worktrees, diff; arquivos (files.rs);
+│   │                       #            quadro de tarefas (board.rs, .project/tasks/*.md)
 │   ├── syntax/             # ide-syntax — tree-sitter: outline e busca de símbolos
 │   ├── lsp/                # ide-lsp — cliente LSP + gerenciador de servidores por linguagem
+│   ├── lint/               # ide-lint — regras de qualidade estilo SonarLint, notas A–E
 │   ├── mcp/                # ide-mcp — servidor MCP stdio (bin) com as ferramentas do agente
 │   ├── pty/                # ide-pty — terminais (portable-pty)
 │   ├── timeline/           # ide-timeline — eventos em SQLite
@@ -62,10 +64,23 @@ Editor (lib/editor.ts)
   servidor publica diagnósticos → emit("lsp://diagnostics") → markers do Monaco
   Ctrl+S → file_write (atômico) → lsp_change + lsp_save (rust-analyzer checa no save)
 
+Qualidade de código (ADR 0006)
+  editor: texto atual → lint_source (debounce) → ide_lint::lint_source → markers "ide-lint"
+  painel Problemas: lint_project (a cada mudança no git) + diagnósticos do LSP (com `code`)
+  Error Lens (lib/editor.ts): a cada mudança de marcadores, a mais grave da linha como
+    texto injetado no fim; erros do compilador passam por lib/explain.ts (TS/Rust → pt-BR)
+  quick fixes: Issue.fix (edições) → code action do Monaco; "ignorar" insere o comentário
+
+Quadro de tarefas (ADR 0006)
+  BoardView → board_list/create/set_status/set_meta/delete → ide_core::board (.md)
+  Executar com o agente → task_create (worktree) + Status: em progresso + Worktree: task/<slug>
+  Integrar → Status: concluída; Descartar → a fazer (merge ignora mudanças em .project/tasks/)
+
 Ferramentas do agente (ADR 0004)
   ide_agent::locate → IDE_MCP_COMMAND (env do sidecar) → server.ts::ideMcp
   → SDK sobe `ide-mcp --root <cwd>` por sessão → outline_file, find_symbol,
-    project_tree (ide-syntax/ide-core), diagnostics, definition (ide-lsp)
+    project_tree (ide-syntax/ide-core), code_issues (ide-lint), task_board (board) — só
+    leem, pré-aprovadas —, diagnostics, definition (ide-lsp — pedem aprovação)
 ```
 
 ## UI (apps/desktop/src)
@@ -82,8 +97,11 @@ lib/banners.ts     avisos no topo
 lib/editor.ts      abas abertas, salvar, markers e providers LSP do Monaco
 lib/monaco.ts      workers, tema e linguagens do Monaco
 lib/fuzzy.ts       busca aproximada da paleta de comandos
+lib/quality.ts     regras, problemas ao vivo/do projeto, preferências do Error Lens
+lib/explain.ts     gerador de explicações dos erros do compilador (TS e Rust)
 components/        Sidebar, TopBar, ThreadView (+ SentinelView), Composer, ChatItem,
-                   EditorView, FilesPanel, CommandPalette (Ctrl+K / Ctrl+P),
+                   EditorView, FilesPanel, CommandPalette (Ctrl+K / Ctrl+P), BoardView,
+                   ProblemsPanel,
                    RightPanel (DiffPanel, FilesPanel, TimelinePanel, TodayPanel), Banners, Terminal
 ```
 

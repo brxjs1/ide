@@ -107,5 +107,6 @@ SolidJS UI: threads · editor Monaco · diff · terminal · timeline · paleta (
 | 3 | Monaco, LSP, tree-sitter como tools MCP | ✅ editor com hover/definição/diagnósticos, `ide-mcp` para o agente (ADR 0004); autocompletar e rename depois |
 | 4 | Background agent, daily brief, debugger, embeddings | ✅ Sentinela, resumo do dia e orçamento; debugger e embeddings adiados (ADR 0003) |
 | 5 | Interface moderna: tema preto (referência T3 Code), layout inset, paleta de comandos e atalhos | ✅ (ADR 0005) |
+| 6 | Qualidade de código (regras estilo SonarLint, notas A–E, quick fixes), Error Lens, explicador de erros TS/Rust, quadro de tarefas | ✅ (ADR 0006) |
 
 A Fase 0 existe para descobrir, usando no dia a dia, o que a Fase 1 realmente precisa ter.
