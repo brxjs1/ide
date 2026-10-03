@@ -1,6 +1,7 @@
 //! Núcleo do ide. Tudo aqui deve funcionar sem Tauri, para ser testável
 //! e reutilizável pelo servidor MCP (ver `.project/decisions/0001`).
 
+pub mod board;
 pub mod diff;
 pub mod files;
 pub mod git;
@@ -19,6 +20,8 @@ pub enum Error {
     NotARepo(String),
     #[error("git {args} falhou: {stderr}")]
     Git { args: String, stderr: String },
+    #[error("a tarefa {0} não está no quadro")]
+    BoardTaskNotFound(String),
     #[error("caminho fora do projeto: {0}")]
     OutsideRoot(String),
     #[error("arquivo grande demais para o editor ({0} bytes)")]
@@ -41,6 +44,8 @@ pub enum Error {
     MainDirty,
     #[error("a tarefa {0} não tem commits para integrar")]
     NothingToMerge(String),
+    #[error("a tarefa altera arquivos do quadro que o app mudou no checkout ({0}); commite o quadro ou desfaça a mudança deles antes de integrar")]
+    BoardConflict(String),
     #[error("conflito ao integrar a tarefa (merge abortado): {0}")]
     MergeConflict(String),
     #[error(transparent)]
