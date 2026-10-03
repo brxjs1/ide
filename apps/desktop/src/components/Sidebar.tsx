@@ -18,6 +18,7 @@ export default function Sidebar(props: {
   selection: Selection;
   onSelect: (selection: Selection) => void;
   onPanel: (tab: "files" | "diff" | "timeline" | "today") => void;
+  onPalette: () => void;
   onRefresh: () => void;
   onCollapse: () => void;
 }) {
@@ -48,6 +49,17 @@ export default function Sidebar(props: {
         <label class="search">
           <Icon name="search" />
           <input placeholder="Buscar" value={query()} onInput={(e) => setQuery(e.currentTarget.value)} />
+          <button
+            class="search-kbd"
+            title="Paleta de comandos"
+            onClick={(e) => {
+              e.preventDefault();
+              props.onPalette();
+            }}
+          >
+            <kbd>Ctrl</kbd>
+            <kbd>K</kbd>
+          </button>
         </label>
         <button
           class="icon-btn"

@@ -106,8 +106,8 @@ export default function ThreadView(props: {
           </h1>
           {composer(true)}
           <p class="hero-hint">
-            <kbd>Enter</kbd> envia · <kbd>Shift</kbd>+<kbd>Enter</kbd> quebra linha · escolha{" "}
-            <em>Novo worktree</em> para o agente trabalhar sozinho sem tocar no seu branch
+            <kbd>Enter</kbd> envia · <kbd>Shift</kbd>+<kbd>Enter</kbd> quebra linha · <kbd>Ctrl</kbd>
+            <kbd>K</kbd> comandos · <em>Novo worktree</em> deixa o agente trabalhar sem tocar no seu branch
           </p>
         </div>
       }

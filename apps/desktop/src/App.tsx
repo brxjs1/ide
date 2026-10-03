@@ -1,6 +1,7 @@
 import { Match, Show, Switch, createEffect, createResource, createSignal, on, onCleanup, onMount } from "solid-js";
 
 import Banners from "./components/Banners";
+import CommandPalette, { type Command, type PaletteMode } from "./components/CommandPalette";
 import EditorView from "./components/EditorView";
 import type { ComposerValue } from "./components/Composer";
 import RightPanel, { type PanelTab } from "./components/RightPanel";
@@ -24,7 +25,7 @@ import {
 } from "./lib/ipc";
 import * as sentinel from "./lib/sentinel";
 import { reviewTask, reviewWorkingTree, setRoot } from "./lib/tasks";
-import { adoptTasks, createThread, load, threadById, threads, updateThread } from "./lib/threads";
+import { adoptTasks, age, createThread, load, threadById, threads, updateThread } from "./lib/threads";
 
 const DEFAULT_DRAFT: ComposerValue = { model: "claude-opus-5-5", effort: "high", mode: "assisted", where: "local" };
 
@@ -59,6 +60,7 @@ function Workspace(props: { initial: ProjectInfo }) {
   const [terminalOpen, setTerminalOpen] = createSignal(false);
   const [terminalMounted, setTerminalMounted] = createSignal(false);
   const [panel, setPanel] = createSignal<PanelTab | null>(null);
+  const [palette, setPalette] = createSignal<PaletteMode | null>(null);
 
   const thread = () => {
     const s = selection();
@@ -106,6 +108,35 @@ function Workspace(props: { initial: ProjectInfo }) {
   );
   window.addEventListener("focus", refresh);
   onCleanup(() => window.removeEventListener("focus", refresh));
+
+  const toggleTerminal = () => {
+    setTerminalMounted(true);
+    setTerminalOpen((v) => !v);
+  };
+  const togglePanel = (tab: PanelTab) => setPanel((current) => (current === tab ? null : tab));
+
+  // Atalhos globais. Em captura: o Monaco e o xterm não chegam a ver Ctrl+K/P/B/J.
+  const SHORTCUTS: Record<string, () => void> = {
+    k: () => setPalette((p) => (p ? null : "all")),
+    p: () => setPalette((p) => (p === "files" ? null : "files")),
+    n: () => setSelection({ kind: "new" }),
+    b: () => setSidebarHidden((v) => !v),
+    j: toggleTerminal,
+  };
+  const onShortcut = (e: KeyboardEvent) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    // No terminal, Ctrl+B/N/P/K/J são do readline do shell (cursor, histórico, apagar linha).
+    if (e.target instanceof Element && e.target.closest(".terminal-dock")) return;
+    // Dentro da paleta, Ctrl+N/P navegam na lista.
+    if (palette() && (e.key === "n" || e.key === "p")) return;
+    const action = SHORTCUTS[e.key.toLowerCase()];
+    if (!action) return;
+    e.preventDefault();
+    e.stopPropagation();
+    action();
+  };
+  window.addEventListener("keydown", onShortcut, true);
+  onCleanup(() => window.removeEventListener("keydown", onShortcut, true));
 
   const changeDraft = (patch: Partial<ComposerValue>) => {
     setDraft((d) => ({ ...d, ...patch }));
@@ -158,6 +189,38 @@ function Workspace(props: { initial: ProjectInfo }) {
     }
   };
 
+  const commands = (): Command[] => {
+    const actions: Command[] = [
+      { id: "new", group: "Ações", label: "Nova thread", icon: "edit", keys: ["Ctrl", "N"], run: () => setSelection({ kind: "new" }) },
+      { id: "files", group: "Ações", label: "Abrir arquivo…", icon: "file", keys: ["Ctrl", "P"], run: () => queueMicrotask(() => setPalette("files")) },
+      { id: "editor", group: "Ações", label: "Ir para o editor", icon: "code", run: () => setSelection({ kind: "editor" }) },
+      { id: "sentinel", group: "Ações", label: "Ir para a Sentinela", icon: "eye", run: () => setSelection({ kind: "sentinel" }) },
+      { id: "review", group: "Ações", label: "Revisar alterações do checkout", icon: "review", run: () => void reviewLocal() },
+      { id: "terminal", group: "Ações", label: terminalOpen() ? "Esconder terminal" : "Mostrar terminal", icon: "terminal", keys: ["Ctrl", "J"], run: toggleTerminal },
+      { id: "sidebar", group: "Ações", label: sidebarHidden() ? "Mostrar barra lateral" : "Esconder barra lateral", icon: "sidebar", keys: ["Ctrl", "B"], run: () => setSidebarHidden((v) => !v) },
+      { id: "p-diff", group: "Ações", label: "Painel: Alterações", hint: files().length ? `${files().length} arquivo(s)` : undefined, icon: "branch", run: () => togglePanel("diff") },
+      { id: "p-files", group: "Ações", label: "Painel: Arquivos", icon: "folder", run: () => togglePanel("files") },
+      { id: "p-timeline", group: "Ações", label: "Painel: Timeline", icon: "clock", run: () => togglePanel("timeline") },
+      { id: "p-today", group: "Ações", label: "Painel: Hoje", icon: "chart", run: () => togglePanel("today") },
+      { id: "refresh", group: "Ações", label: "Atualizar estado do git", icon: "refresh", run: refresh },
+    ];
+    if (selection().kind === "editor" && editor.editorState.active) {
+      actions.splice(1, 0, { id: "save", group: "Ações", label: "Salvar arquivo", icon: "check", keys: ["Ctrl", "S"], run: () => void editor.save() });
+    }
+    const list = [...threads()].sort((a, b) => Number(a.settled) - Number(b.settled) || b.updatedAt - a.updatedAt);
+    return [
+      ...actions,
+      ...list.map<Command>((t) => ({
+        id: `thread:${t.id}`,
+        group: "Threads",
+        label: t.title,
+        hint: `${t.location.kind === "worktree" ? `task/${t.location.slug} · ` : ""}${age(t.updatedAt)}`,
+        icon: t.location.kind === "worktree" ? "worktree" : "edit",
+        run: () => setSelection({ kind: "thread", id: t.id }),
+      })),
+    ];
+  };
+
   const title = () => {
     const s = selection();
     if (s.kind === "sentinel") return "Sentinela";
@@ -173,7 +236,8 @@ function Workspace(props: { initial: ProjectInfo }) {
           threads={threads()}
           selection={selection()}
           onSelect={setSelection}
-          onPanel={(tab) => setPanel((current) => (current === tab ? null : tab))}
+          onPanel={togglePanel}
+          onPalette={() => setPalette("all")}
           onRefresh={refresh}
           onCollapse={() => setSidebarHidden(true)}
         />
@@ -194,10 +258,7 @@ function Workspace(props: { initial: ProjectInfo }) {
           onReviewTask={() => thread() && void reviewTask(root, thread()!)}
           onMerge={() => void merge()}
           onDiscard={() => void discard()}
-          onTerminal={() => {
-            setTerminalMounted(true);
-            setTerminalOpen((v) => !v);
-          }}
+          onTerminal={toggleTerminal}
           onPanel={() => setPanel((p) => (p ? null : "diff"))}
         />
         <Banners />
@@ -228,6 +289,15 @@ function Workspace(props: { initial: ProjectInfo }) {
           </div>
         </Show>
       </main>
+
+      <CommandPalette
+        open={palette() !== null}
+        mode={palette() ?? "all"}
+        root={root}
+        commands={palette() ? commands() : []}
+        onOpenFile={(path) => void editor.openFile(path)}
+        onClose={() => setPalette(null)}
+      />
 
       <Show when={panel()}>
         {(tab) => (
