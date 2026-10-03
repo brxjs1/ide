@@ -1,0 +1,15 @@
+[package]
+name = "ide-lsp"
+description = "Cliente LSP: servidores de linguagem por projeto (diagnósticos, hover, definição)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+url = "2"
+
+[dev-dependencies]
+tempfile = "3"
