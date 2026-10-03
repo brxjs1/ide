@@ -99,6 +99,9 @@ pub struct Diagnostic {
     pub severity: u8,
     pub message: String,
     pub source: Option<String>,
+    /// Código do erro no servidor (`2322` do TypeScript, `E0308` do Rust...), para o
+    /// editor explicar o que aconteceu e como resolver.
+    pub code: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -462,6 +465,12 @@ pub fn parse_diagnostics(params: &Value) -> Option<(PathBuf, Vec<Diagnostic>)> {
                 severity: d["severity"].as_u64().unwrap_or(1) as u8,
                 message: d["message"].as_str()?.to_owned(),
                 source: d["source"].as_str().map(str::to_owned),
+                // O LSP manda número ou texto.
+                code: match &d["code"] {
+                    Value::String(s) => Some(s.clone()),
+                    Value::Number(n) => Some(n.to_string()),
+                    _ => None,
+                },
             })
         })
         .collect();
@@ -720,7 +729,7 @@ process.stdin.on("data", (chunk) => {
       case "texto": send({ jsonrpc: "2.0", id: m.id, result: texts[m.params.uri] ?? null }); break;
       case "textDocument/didOpen": texts[m.params.textDocument.uri] = m.params.textDocument.text;
         send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics", params: { uri: m.params.textDocument.uri,
-          diagnostics: [{ range: { start: { line: 1, character: 2 }, end: { line: 1, character: 5 } }, severity: 2, message: "não usado", source: "fake" }] } });
+          diagnostics: [{ range: { start: { line: 1, character: 2 }, end: { line: 1, character: 5 } }, severity: 2, message: "não usado", source: "fake", code: 6133 }] } });
         break;
       case "textDocument/hover":
         send({ jsonrpc: "2.0", id: m.id, result: { contents: { kind: "markdown", value: `linha ${m.params.position.line} cfg=${configured}` } } }); break;
@@ -769,6 +778,11 @@ process.stdin.on("data", (chunk) => {
         assert_eq!(diags[0].message, "não usado");
         assert_eq!(diags[0].severity, 2);
         assert_eq!(diags[0].range.start.character, 2);
+        assert_eq!(
+            diags[0].code.as_deref(),
+            Some("6133"),
+            "código numérico vira texto"
+        );
 
         // Salvar reanalisa: o falso publica a lista vazia.
         client.did_save(&file, "fn main() {}").unwrap();
