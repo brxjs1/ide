@@ -19,6 +19,34 @@ const SYSTEM_APPEND = [
   "O conhecimento do projeto está em CLAUDE.md e .project/ — siga as convenções de lá.",
 ].join("\n");
 
+/** Ferramentas do servidor MCP do app (crates/mcp) que só leem arquivos (tree-sitter): aprovadas de antemão. */
+export const IDE_READ_TOOLS = ["outline_file", "find_symbol", "project_tree"].map((name) => `mcp__ide__${name}`);
+
+/**
+ * Ferramentas que sobem o servidor de linguagem. Não editam nada, mas o servidor executa
+ * código do projeto (build.rs, proc-macros e `cargo check` no rust-analyzer; o tsserver do
+ * node_modules): passam pela aprovação como um comando e ficam fora do modo plan.
+ */
+export const IDE_LSP_TOOLS = ["diagnostics", "definition"].map((name) => `mcp__ide__${name}`);
+
+const IDE_TOOLS_HINT =
+  "Ferramentas do ide (mcp__ide__*): outline_file e find_symbol (tree-sitter) para entender a estrutura sem ler arquivos inteiros; diagnostics e definition (servidor de linguagem) para erros e navegação.";
+
+/** Servidor MCP do app, se o Rust informou o binário (IDE_MCP_COMMAND). */
+export function ideMcp(
+  cwd: string,
+  mode: AutonomyMode,
+  env: NodeJS.ProcessEnv = process.env,
+): Pick<Options, "mcpServers" | "allowedTools" | "disallowedTools"> {
+  const command = env.IDE_MCP_COMMAND;
+  if (!command) return {};
+  return {
+    mcpServers: { ide: { type: "stdio", command, args: ["--root", cwd] } },
+    allowedTools: IDE_READ_TOOLS,
+    ...(mode === "plan" ? { disallowedTools: IDE_LSP_TOOLS } : {}),
+  };
+}
+
 /**
  * plan       → só lê e planeja; nada é modificado.
  * assisted   → leituras automáticas; edições e comandos pedem aprovação na UI.
@@ -136,15 +164,22 @@ export class AgentServer {
     const running: Running = { promptId: msg.id, abort };
     conv.running = running;
     const mode = permissionModeFor(msg.mode);
+    const mcp = ideMcp(msg.cwd, msg.mode);
+    const disallowed = [...(msg.mode === "review" ? EDIT_TOOLS : []), ...(mcp.disallowedTools ?? [])];
 
     const options: Options = {
       cwd: msg.cwd,
       abortController: abort,
       permissionMode: mode,
       ...(mode === "bypassPermissions" ? { allowDangerouslySkipPermissions: true } : {}),
-      ...(msg.mode === "review" ? { disallowedTools: EDIT_TOOLS } : {}),
+      ...(disallowed.length ? { disallowedTools: disallowed } : {}),
       canUseTool: this.canUseTool(conversation, msg.id),
-      systemPrompt: { type: "preset", preset: "claude_code", append: SYSTEM_APPEND },
+      systemPrompt: {
+        type: "preset",
+        preset: "claude_code",
+        append: process.env.IDE_MCP_COMMAND ? `${SYSTEM_APPEND}\n${IDE_TOOLS_HINT}` : SYSTEM_APPEND,
+      },
+      ...(mcp.mcpServers ? { mcpServers: mcp.mcpServers, allowedTools: mcp.allowedTools } : {}),
       ...(msg.model ? { model: msg.model } : {}),
       ...(msg.effort ? { effort: msg.effort } : {}),
       ...(conv.sessionId ? { resume: conv.sessionId } : {}),

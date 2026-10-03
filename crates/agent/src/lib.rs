@@ -161,6 +161,8 @@ pub enum Outbound {
 pub struct SidecarCommand {
     pub program: String,
     pub args: Vec<String>,
+    /// Variáveis extras para o processo (ex.: `IDE_MCP_COMMAND`).
+    pub env: Vec<(String, String)>,
 }
 
 impl SidecarCommand {
@@ -194,11 +196,34 @@ impl SidecarCommand {
             .ok_or_else(|| {
                 Error::ScriptNotFound(candidates.into_iter().flatten().last().unwrap_or_default())
             })?;
+        let mut env = Vec::new();
+        if let Some(mcp) = locate_mcp() {
+            env.push((
+                "IDE_MCP_COMMAND".to_owned(),
+                mcp.to_string_lossy().into_owned(),
+            ));
+        }
         Ok(Self {
             program: std::env::var("IDE_NODE").unwrap_or_else(|_| "node".into()),
             args: vec![script.to_string_lossy().into_owned()],
+            env,
         })
     }
+}
+
+/// Binário do servidor MCP (`crates/mcp`): `IDE_MCP_COMMAND` ou ao lado do executável
+/// do app (target/debug em dev; o instalador o coloca junto como externalBin).
+pub fn locate_mcp() -> Option<PathBuf> {
+    if let Some(explicit) = std::env::var_os("IDE_MCP_COMMAND") {
+        return Some(PathBuf::from(explicit)).filter(|p| p.is_file());
+    }
+    let exe = std::env::current_exe().ok()?;
+    let name = if cfg!(windows) {
+        "ide-mcp.exe"
+    } else {
+        "ide-mcp"
+    };
+    Some(exe.with_file_name(name)).filter(|p| p.is_file())
 }
 
 pub struct AgentProcess {
@@ -216,6 +241,7 @@ impl AgentProcess {
     ) -> Result<Self> {
         let mut child = Command::new(&command.program)
             .args(&command.args)
+            .envs(command.env.iter().map(|(k, v)| (k, v)))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -390,7 +416,7 @@ mod tests {
         out({ type: "ready" });
         rl.on("line", (l) => {
           const m = JSON.parse(l);
-          out({ type: "event", conversation: m.conversation, promptId: m.id, event: { kind: "text", text: "eco: " + m.text } });
+          out({ type: "event", conversation: m.conversation, promptId: m.id, event: { kind: "text", text: "eco: " + m.text + " " + process.env.IDE_TESTE } });
           out({ type: "done", conversation: m.conversation, promptId: m.id, sessionId: "s", isError: false, costUsd: null, durationMs: null, result: null });
           console.log("não é json");
         });
@@ -404,6 +430,7 @@ mod tests {
             &SidecarCommand {
                 program: "node".into(),
                 args: vec!["-e".into(), FAKE.into()],
+                env: vec![("IDE_TESTE".into(), "1".into())],
             },
             move |m| tx.send(m).unwrap(),
             move |code| exit_tx.send(code).unwrap(),
@@ -431,7 +458,7 @@ mod tests {
                 conversation: "main".into(),
                 prompt_id: "p1".into(),
                 event: AgentEvent::Text {
-                    text: "eco: oi".into()
+                    text: "eco: oi 1".into()
                 }
             }
         );

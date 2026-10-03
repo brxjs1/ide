@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --filter @ide/agent build && pnpm --filter @ide/desktop tauri dev",
+    "dev": "cargo build -p ide-mcp && pnpm --filter @ide/agent build && pnpm --filter @ide/desktop tauri dev",
     "build": "pnpm --filter @ide/desktop tauri build --config src-tauri/tauri.bundle.conf.json",
     "dev:web": "pnpm --filter @ide/desktop dev",
     "typecheck": "pnpm -r typecheck",

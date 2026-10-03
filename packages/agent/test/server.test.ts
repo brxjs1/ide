@@ -4,7 +4,15 @@ import { test } from "node:test";
 import type { Options, SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 
 import type { AutonomyMode, Outbound } from "../src/protocol.ts";
-import { AgentServer, type QueryFn, incrementalCost, permissionModeFor } from "../src/server.ts";
+import {
+  AgentServer,
+  IDE_LSP_TOOLS,
+  IDE_READ_TOOLS,
+  type QueryFn,
+  ideMcp,
+  incrementalCost,
+  permissionModeFor,
+} from "../src/server.ts";
 
 // Mensagens do SDK reduzidas ao que o servidor lê.
 const init = (session = "s1") => ({
@@ -323,4 +331,43 @@ test("retoma sessão e custo de uma conversa vinda de antes do reinício", async
   const done = out.find((m) => m.type === "done");
   assert.equal(done?.type === "done" && Math.round(done.costUsd! * 100) / 100, 0.1);
   assert.equal(done?.type === "done" && done.costTotal, 0.4);
+});
+
+test("registra o servidor MCP do app quando o Rust informa o binário", () => {
+  assert.deepEqual(ideMcp("/p", "assisted", {}), {});
+  const config = ideMcp("/proj", "assisted", { IDE_MCP_COMMAND: "/app/ide-mcp" });
+  assert.deepEqual(config.mcpServers, {
+    ide: { type: "stdio", command: "/app/ide-mcp", args: ["--root", "/proj"] },
+  });
+  // Só as de tree-sitter são aprovadas de antemão: as de LSP executam código do projeto.
+  assert.deepEqual(config.allowedTools, IDE_READ_TOOLS);
+  assert.equal(config.disallowedTools, undefined);
+  assert.deepEqual(ideMcp("/proj", "plan", { IDE_MCP_COMMAND: "x" }).disallowedTools, IDE_LSP_TOOLS);
+  assert.ok([...IDE_READ_TOOLS, ...IDE_LSP_TOOLS].every((t) => t.startsWith("mcp__ide__")));
+});
+
+test("o servidor MCP chega às opções do SDK, e plan não usa o servidor de linguagem", async () => {
+  const before = process.env.IDE_MCP_COMMAND;
+  process.env.IDE_MCP_COMMAND = "/app/ide-mcp";
+  try {
+    const calls: Options[] = [];
+    const server = new AgentServer(
+      fakeQuery(async function* () {
+        yield result();
+      }, calls),
+      () => {},
+    );
+    await prompt(server, "p1", "main", "assisted");
+    await prompt(server, "p2", "outra", "plan");
+    await prompt(server, "p3", "review:x", "review");
+
+    assert.ok(calls[0]?.mcpServers?.ide);
+    assert.deepEqual(calls[0]?.allowedTools, IDE_READ_TOOLS);
+    assert.equal(calls[0]?.disallowedTools, undefined);
+    assert.deepEqual(calls[1]?.disallowedTools, IDE_LSP_TOOLS);
+    assert.deepEqual(calls[2]?.disallowedTools, ["Edit", "MultiEdit", "Write", "NotebookEdit"]);
+  } finally {
+    if (before === undefined) delete process.env.IDE_MCP_COMMAND;
+    else process.env.IDE_MCP_COMMAND = before;
+  }
 });
