@@ -20,7 +20,9 @@ const SYSTEM_APPEND = [
 ].join("\n");
 
 /** Ferramentas do servidor MCP do app (crates/mcp) que só leem arquivos (tree-sitter): aprovadas de antemão. */
-export const IDE_READ_TOOLS = ["outline_file", "find_symbol", "project_tree"].map((name) => `mcp__ide__${name}`);
+export const IDE_READ_TOOLS = ["outline_file", "find_symbol", "project_tree", "code_issues", "task_board"].map(
+  (name) => `mcp__ide__${name}`,
+);
 
 /**
  * Ferramentas que sobem o servidor de linguagem. Não editam nada, mas o servidor executa
@@ -30,7 +32,7 @@ export const IDE_READ_TOOLS = ["outline_file", "find_symbol", "project_tree"].ma
 export const IDE_LSP_TOOLS = ["diagnostics", "definition"].map((name) => `mcp__ide__${name}`);
 
 const IDE_TOOLS_HINT =
-  "Ferramentas do ide (mcp__ide__*): outline_file e find_symbol (tree-sitter) para entender a estrutura sem ler arquivos inteiros; diagnostics e definition (servidor de linguagem) para erros e navegação.";
+  "Ferramentas do ide (mcp__ide__*): outline_file e find_symbol (tree-sitter) para entender a estrutura sem ler arquivos inteiros; diagnostics e definition (servidor de linguagem) para erros e navegação; code_issues para problemas de qualidade (estilo SonarLint) antes de concluir; task_board para ler o quadro de tarefas (.project/tasks/); o app cuida do status das tarefas, não edite esses arquivos.";
 
 /** Servidor MCP do app, se o Rust informou o binário (IDE_MCP_COMMAND). */
 export function ideMcp(
