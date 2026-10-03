@@ -2,6 +2,7 @@
 //! e reutilizável pelo servidor MCP (ver `.project/decisions/0001`).
 
 pub mod diff;
+pub mod files;
 pub mod git;
 pub mod history;
 pub mod project;
@@ -18,6 +19,12 @@ pub enum Error {
     NotARepo(String),
     #[error("git {args} falhou: {stderr}")]
     Git { args: String, stderr: String },
+    #[error("caminho fora do projeto: {0}")]
+    OutsideRoot(String),
+    #[error("arquivo grande demais para o editor ({0} bytes)")]
+    TooLarge(u64),
+    #[error("arquivo binário: {0}")]
+    Binary(String),
     #[error("arquivo sem alterações no repositório: {0}")]
     NotChanged(String),
     #[error("nome de tarefa inválido: {0:?} (use a-z, 0-9 e -, até 50 caracteres)")]
