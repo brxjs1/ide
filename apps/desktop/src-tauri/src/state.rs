@@ -12,6 +12,8 @@ pub struct AppState {
     pub agent: Mutex<AgentSlot>,
     /// promptId → projeto (raiz), para gravar os eventos do agente na timeline certa.
     pub prompts: Mutex<HashMap<String, String>>,
+    /// Servidores de linguagem do editor, por raiz de projeto (criados sob demanda).
+    pub lsp: Mutex<HashMap<std::path::PathBuf, std::sync::Arc<ide_lsp::LspManager>>>,
 }
 
 /// Processo do agente atual. `generation` evita que o aviso de saída de um processo
@@ -29,6 +31,7 @@ impl AppState {
             timeline,
             agent: Mutex::default(),
             prompts: Mutex::default(),
+            lsp: Mutex::default(),
         }
     }
 

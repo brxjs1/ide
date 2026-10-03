@@ -1,6 +1,7 @@
 import { Show, createSignal } from "solid-js";
 
 import { isRunning } from "../lib/agent";
+import { editorState, save } from "../lib/editor";
 import { reviewConversation } from "../lib/tasks";
 import type { Thread } from "../lib/threads";
 import Icon from "./Icons";
@@ -10,6 +11,7 @@ export default function TopBar(props: {
   projectName: string;
   title: string;
   thread: Thread | null;
+  editor: boolean;
   changed: number;
   sidebarHidden: boolean;
   terminalOpen: boolean;
@@ -44,10 +46,16 @@ export default function TopBar(props: {
       </div>
       <span class="grow" />
 
+      <Show when={props.editor && editorState.files.find((f) => f.path === editorState.active)?.dirty}>
+        <button class="btn primary" onClick={() => void save()} title="Salvar (Ctrl+S)">
+          Salvar
+        </button>
+      </Show>
+
       <Show
-        when={worktree()}
+        when={!props.editor && worktree()}
         fallback={
-          <Show when={props.changed > 0}>
+          <Show when={!props.editor && props.changed > 0}>
             <button class="btn ghost-border" onClick={() => props.onReviewLocal()} title="Revisão antes do commit">
               <Icon name="review" size={14} /> Revisar
               <span class="btn-count">{props.changed}</span>

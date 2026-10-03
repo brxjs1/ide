@@ -17,6 +17,8 @@ tauri-build.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 ide-agent.workspace = true
 ide-core.workspace = true
+ide-lsp.workspace = true
+ide-syntax.workspace = true
 ide-pty.workspace = true
 ide-timeline.workspace = true
 serde.workspace = true

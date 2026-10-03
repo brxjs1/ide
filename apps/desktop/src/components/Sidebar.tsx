@@ -1,13 +1,14 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 
 import { isRunning, lastText, pendingPermissions } from "../lib/agent";
+import { editorState } from "../lib/editor";
 import { parseVerdict } from "../lib/prompts";
 import { type SentinelStatus, sentinel } from "../lib/sentinel";
 import { reviewConversation } from "../lib/tasks";
 import { type Thread, age } from "../lib/threads";
 import Icon from "./Icons";
 
-export type Selection = { kind: "new" } | { kind: "thread"; id: string } | { kind: "sentinel" };
+export type Selection = { kind: "new" } | { kind: "thread"; id: string } | { kind: "sentinel" } | { kind: "editor" };
 
 const SETTLED_PAGE = 10;
 
@@ -16,7 +17,7 @@ export default function Sidebar(props: {
   threads: Thread[];
   selection: Selection;
   onSelect: (selection: Selection) => void;
-  onPanel: (tab: "diff" | "timeline" | "today") => void;
+  onPanel: (tab: "files" | "diff" | "timeline" | "today") => void;
   onRefresh: () => void;
   onCollapse: () => void;
 }) {
@@ -58,6 +59,26 @@ export default function Sidebar(props: {
       </div>
 
       <div class="thread-scroll">
+        <button
+          class="sentinel-row"
+          classList={{ active: props.selection.kind === "editor" }}
+          onClick={() => props.onSelect({ kind: "editor" })}
+        >
+          <Icon name="code" />
+          <span class="grow">Editor</span>
+          <Show
+            when={editorState.files.length}
+            fallback={<span class="card-age">vazio</span>}
+          >
+            <span class="card-age">
+              {editorState.files.length} aberto(s)
+              {editorState.files.some((f) => f.dirty) ? " ·" : ""}
+            </span>
+            <Show when={editorState.files.some((f) => f.dirty)}>
+              <span class="dot unsaved" title="Arquivos com alterações não salvas" />
+            </Show>
+          </Show>
+        </button>
         <button
           class="sentinel-row"
           classList={{ active: props.selection.kind === "sentinel" }}
@@ -125,6 +146,9 @@ export default function Sidebar(props: {
       <footer class="sidebar-foot">
         <button class="icon-btn" title="Hoje e configurações" onClick={() => props.onPanel("today")}>
           <Icon name="settings" />
+        </button>
+        <button class="icon-btn" title="Arquivos" onClick={() => props.onPanel("files")}>
+          <Icon name="file" />
         </button>
         <button class="icon-btn" title="Alterações (diff)" onClick={() => props.onPanel("diff")}>
           <Icon name="branch" />

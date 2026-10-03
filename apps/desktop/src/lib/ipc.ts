@@ -115,3 +115,57 @@ export const dailyBrief = (root: string) => invoke<Brief>("daily_brief", { root 
 export type SettingKey = "budget_usd" | "sentinel_enabled" | "sentinel_idle_min" | "composer";
 export const settingsGet = (key: SettingKey) => invoke<string | null>("settings_get", { key });
 export const settingsSet = (key: SettingKey, value: string) => invoke<void>("settings_set", { key, value });
+
+// Editor (crates/core::files, crates/syntax, crates/lsp).
+export interface FileEntry {
+  path: string;
+  dir: boolean;
+}
+
+export interface CodeSymbol {
+  name: string;
+  kind: string;
+  line: number;
+  endLine: number;
+  container: string | null;
+  depth: number;
+}
+
+export interface LspPosition {
+  line: number;
+  character: number;
+}
+
+export interface LspRange {
+  start: LspPosition;
+  end: LspPosition;
+}
+
+export interface LspDiagnostic {
+  range: LspRange;
+  severity: number;
+  message: string;
+  source: string | null;
+}
+
+export interface LspTarget {
+  path: string | null;
+  absolute: string;
+  range: LspRange;
+}
+
+export const filesTree = (root: string) => invoke<FileEntry[]>("files_tree", { root });
+export const fileRead = (root: string, path: string) => invoke<string>("file_read", { root, path });
+export const fileWrite = (root: string, path: string, content: string) =>
+  invoke<void>("file_write", { root, path, content });
+export const fileOutline = (root: string, path: string) => invoke<CodeSymbol[]>("file_outline", { root, path });
+export const lspOpen = (root: string, path: string, text: string) => invoke<boolean>("lsp_open", { root, path, text });
+export const lspChange = (root: string, path: string, version: number, text: string) =>
+  invoke<void>("lsp_change", { root, path, version, text });
+export const lspSave = (root: string, path: string, text: string) =>
+  invoke<void>("lsp_save", { root, path, text });
+export const lspClose = (root: string, path: string) => invoke<void>("lsp_close", { root, path });
+export const lspHover = (root: string, path: string, line: number, character: number) =>
+  invoke<string | null>("lsp_hover", { root, path, line, character });
+export const lspDefinition = (root: string, path: string, line: number, character: number) =>
+  invoke<LspTarget[]>("lsp_definition", { root, path, line, character });

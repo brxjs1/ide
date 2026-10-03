@@ -3,11 +3,12 @@ import { Match, Switch } from "solid-js";
 import type { ChangedFile } from "../lib/ipc";
 import type { Thread } from "../lib/threads";
 import DiffPanel from "./DiffPanel";
+import FilesPanel from "./FilesPanel";
 import Icon from "./Icons";
 import TimelinePanel from "./TimelinePanel";
 import TodayPanel from "./TodayPanel";
 
-export type PanelTab = "diff" | "timeline" | "today";
+export type PanelTab = "files" | "diff" | "timeline" | "today";
 
 export default function RightPanel(props: {
   tab: PanelTab;
@@ -21,6 +22,9 @@ export default function RightPanel(props: {
   return (
     <aside class="right-panel">
       <nav class="panel-tabs">
+        <button classList={{ active: props.tab === "files" }} onClick={() => props.onTab("files")}>
+          Arquivos
+        </button>
         <button classList={{ active: props.tab === "diff" }} onClick={() => props.onTab("diff")}>
           Alterações
           <span class="count">{props.files.length || ""}</span>
@@ -38,6 +42,9 @@ export default function RightPanel(props: {
       </nav>
       <div class="panel-body">
         <Switch>
+          <Match when={props.tab === "files"}>
+            <FilesPanel root={props.root} version={props.version} />
+          </Match>
           <Match when={props.tab === "diff"}>
             <DiffPanel root={props.root} files={props.files} thread={props.thread} version={props.version} />
           </Match>

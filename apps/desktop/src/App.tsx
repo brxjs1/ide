@@ -1,6 +1,7 @@
 import { Match, Show, Switch, createEffect, createResource, createSignal, on, onCleanup, onMount } from "solid-js";
 
 import Banners from "./components/Banners";
+import EditorView from "./components/EditorView";
 import type { ComposerValue } from "./components/Composer";
 import RightPanel, { type PanelTab } from "./components/RightPanel";
 import Sidebar, { type Selection } from "./components/Sidebar";
@@ -9,6 +10,7 @@ import ThreadView, { SentinelView } from "./components/ThreadView";
 import TopBar from "./components/TopBar";
 import { onAgentDone, onAgentError } from "./lib/agent";
 import { dismissTitle, notify } from "./lib/banners";
+import * as editor from "./lib/editor";
 import {
   type ProjectInfo,
   changedFiles,
@@ -65,6 +67,8 @@ function Workspace(props: { initial: ProjectInfo }) {
 
   onMount(async () => {
     setRoot(root);
+    editor.init(root);
+    editor.onOpenRequest(() => setSelection({ kind: "editor" }));
     load(root);
     const saved = await settingsGet("composer").catch(() => null);
     if (saved) {
@@ -85,6 +89,8 @@ function Workspace(props: { initial: ProjectInfo }) {
         .then((tasks) => adoptTasks(root, tasks, { model: draft().model, effort: draft().effort }))
         .catch(() => {});
       sentinel.activity();
+      // O agente e o terminal mexem nos arquivos: recarrega abas sem edição pendente.
+      void editor.reloadClean();
     }),
   );
 
@@ -155,6 +161,7 @@ function Workspace(props: { initial: ProjectInfo }) {
   const title = () => {
     const s = selection();
     if (s.kind === "sentinel") return "Sentinela";
+    if (s.kind === "editor") return editor.editorState.active ?? "Editor";
     return thread()?.title ?? "Nova thread";
   };
 
@@ -177,6 +184,7 @@ function Workspace(props: { initial: ProjectInfo }) {
           projectName={project().name}
           title={title()}
           thread={thread()}
+          editor={selection().kind === "editor"}
           changed={files().length}
           sidebarHidden={sidebarHidden()}
           terminalOpen={terminalOpen()}
@@ -194,11 +202,15 @@ function Workspace(props: { initial: ProjectInfo }) {
         />
         <Banners />
         <div class="stage">
+          {/* O editor fica montado: trocar de thread não perde abas, cursor nem undo. */}
+          <div class="stage-pane" classList={{ hidden: selection().kind !== "editor" }}>
+            <EditorView root={root} version={version()} />
+          </div>
           <Switch>
             <Match when={selection().kind === "sentinel"}>
               <SentinelView />
             </Match>
-            <Match when={true}>
+            <Match when={selection().kind !== "editor"}>
               <ThreadView
                 project={project()}
                 thread={thread()}
