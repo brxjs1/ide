@@ -1,7 +1,9 @@
 mod agent;
+mod board;
 mod budget;
 mod commands;
 mod editor;
+mod quality;
 mod state;
 mod terminal;
 
@@ -41,6 +43,14 @@ pub fn run() {
             editor::lsp_close,
             editor::lsp_hover,
             editor::lsp_definition,
+            quality::lint_source,
+            quality::lint_project,
+            quality::lint_rules,
+            board::board_list,
+            board::board_create,
+            board::board_set_status,
+            board::board_set_meta,
+            board::board_delete,
             terminal::pty_spawn,
             terminal::pty_write,
             terminal::pty_resize,

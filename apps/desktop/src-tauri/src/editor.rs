@@ -75,7 +75,7 @@ fn manager(app: &AppHandle, root: &Path) -> Result<Arc<LspManager>, String> {
 }
 
 /// Roda fora da thread principal: iniciar um servidor de linguagem pode levar segundos.
-async fn blocking<T: Send + 'static>(
+pub(crate) async fn blocking<T: Send + 'static>(
     f: impl FnOnce() -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(f).await.map_err(err)?
